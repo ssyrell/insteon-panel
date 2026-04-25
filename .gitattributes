@@ -1,0 +1,7 @@
+# Ensure consistent line endings
+* text=auto
+
+# Force LF for files used inside Linux containers
+.nvmrc text eol=lf
+.devcontainer/** text eol=lf
+script/** text eol=lf

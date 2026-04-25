@@ -10,4 +10,4 @@ ENV \
 COPY .nvmrc /tmp/.nvmrc
 RUN \
   su vscode -c \
-  "source /usr/local/share/nvm/nvm.sh && nvm install $(cat /tmp/.nvmrc) 2>&1"
+  "source /usr/local/share/nvm/nvm.sh && nvm install $(tr -d '\r' < /tmp/.nvmrc) 2>&1"
