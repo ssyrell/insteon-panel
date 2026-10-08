@@ -2,6 +2,29 @@
 
 This repository holds the frontend files of Insteon configuration panel in home assistant.
 
+## Device-controlled scenes
+
+In the scene editor, choose **App-only** for the existing modem-controlled behavior,
+or **Device-controlled** to add one or more hardware devices and their buttons.
+Home Assistant remains a controller in both cases. Adding responders or changing
+their levels and ramp rates updates every associated hardware group.
+
+Controller buttons already used by another managed scene or unmanaged device links
+cannot be reused. Read complete All-Link Databases before saving, and wake battery
+remotes before saving or deleting. If a write fails, some devices may already have
+changed: keep the scene open and retry. Interrupted scenes remain available after
+restart with their reserved scene number.
+
+A controller can also respond to Home Assistant or another controller. Pressing its
+own button controls its local load using the device's local settings; the scene
+editor does not create self-links or change those settings.
+
+This feature requires the matching Insteon WebSocket API changes in Home Assistant
+and the device-controlled scene implementation in `pyinsteon`. For local development,
+mount the `pyinsteon` feature worktree in the core devcontainer and install it with
+`uv pip install -e /workspaces/pyinsteon`. Use the panel development path described
+below. Release both libraries before updating the core integration's dependency pins.
+
 ## Development Setup
 
 1. Install vscode, git, and docker desktop

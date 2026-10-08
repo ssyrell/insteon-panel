@@ -22,17 +22,24 @@ import "@ha/components/ha-svg-icon";
 import "@ha/components/ha-textfield";
 import "@ha/components/ha-checkbox";
 import "@ha/components/ha-switch";
+import "@ha/components/ha-alert";
+import "@ha/components/ha-button";
+import "@ha/components/ha-selector/ha-selector-select";
 import { computeDeviceName } from "@ha/common/entity/compute_device_name";
 import type { DeviceRegistryEntry } from "@ha/data/device_registry";
 import { fetchDeviceRegistry } from "@ha/data/device_registry";
 import type { EntityRegistryEntry } from "@ha/data/entity_registry";
+import type { SelectSelector } from "@ha/data/selector";
 import { fetchEntityRegistry } from "@ha/data/entity_registry";
 import { showConfirmationDialog, showAlertDialog } from "@ha/dialogs/generic/show-dialog-box";
 import { KeyboardShortcutMixin } from "@ha/mixins/keyboard-shortcut-mixin";
 import { haStyle } from "@ha/resources/styles";
 import type { HomeAssistant, Route } from "@ha/types";
 import "@ha/panels/config/ha-config-section";
-import type { Insteon } from "../data/insteon";
+import type { Insteon, InsteonDevice } from "../data/insteon";
+import { fetchInsteonDevice } from "../data/device";
+import { insteonAddress, normalizeAddress } from "../device/registry-lookup";
+import { buttonTitle, plateLayout } from "../device/plate-layout";
 import type { InsteonScene, InsteonSceneDeviceData, InsteonSceneLinkData } from "../data/scene";
 import {
   fetchInsteonScene,
@@ -104,6 +111,18 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
 
   @state() private _saving = false;
 
+  @state() private _controllerDevices: InsteonDevice[] = [];
+
+  @state() private _controllersLoading = true;
+
+  @state() private _controllersSupported = false;
+
+  @state() private _deviceControlled = false;
+
+  @state() private _controllerAddress = "";
+
+  @state() private _controllerGroup = "";
+
   protected firstUpdated(_changedProperties: Map<string | number | symbol, unknown>): void {
     super.firstUpdated(_changedProperties);
 
@@ -140,8 +159,13 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
   }
 
   protected render(): TemplateResult {
-    if (!this.hass || !this._scene) {
+    if (!this.hass) {
       return html``;
+    }
+    if (!this._scene) {
+      return this._errors
+        ? html`<ha-alert alert-type="error">${this._errors}</ha-alert>`
+        : html`<ha-spinner active></ha-spinner>`;
     }
     const name = this._scene
       ? this._scene.name
@@ -183,7 +207,7 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
             </ha-svg-icon>
           </ha-list-item>
         </ha-button-menu>
-        ${this._errors ? html` <div class="errors">${this._errors}</div> ` : ""}
+        ${this._errors ? html`<ha-alert alert-type="error">${this._errors}</ha-alert>` : ""}
         ${!this.narrow ? html` <span slot="header">${name}</span> ` : ""}
         <div
           id="root"
@@ -203,7 +227,7 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
           slot="fab"
           .label=${this.insteon.localize("scenes.scene.save")}
           extended
-          .disabled=${this._saving}
+          .disabled=${this._saving || (this._deviceControlled && this._controllersLoading)}
           @click=${this._saveScene}
           class=${classMap({ dirty: this._dirty, saving: this._saving })}
         >
@@ -214,21 +238,41 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
   }
 
   private async _getDeviceRegistryEntries(): Promise<void> {
-    const allDevices = await fetchDeviceRegistry(this.hass.connection);
-    this._deviceRegistryEntries = allDevices.filter(
-      (device) =>
-        device.config_entries && device.config_entries.includes(this.insteon.config_entry.entry_id),
-    );
+    try {
+      const allDevices = await fetchDeviceRegistry(this.hass.connection);
+      this._deviceRegistryEntries = allDevices.filter(
+        (device) =>
+          device.config_entries &&
+          device.config_entries.includes(this.insteon.config_entry.entry_id),
+      );
+      const devices = await Promise.all(
+        this._deviceRegistryEntries
+          .filter((entry) => /^[0-9A-F]{6}$/.test(normalizeAddress(insteonAddress(entry) || "")))
+          .map((entry) => fetchInsteonDevice(this.hass, entry.id)),
+      );
+      this._controllersSupported = devices.some((device) => device.controller_groups !== undefined);
+      this._controllerDevices = devices.filter(
+        (device) => device.cat !== 0x03 && (device.controller_groups?.length || 0) > 0,
+      );
+    } catch (error: unknown) {
+      this._showError(error);
+    } finally {
+      this._controllersLoading = false;
+    }
   }
 
   private async _getEntityRegistryEntries(): Promise<void> {
-    const allEntities = await fetchEntityRegistry(this.hass.connection);
-    this._entityRegistryEntries = allEntities.filter(
-      (entity) =>
-        entity.entity_category === null &&
-        entity.config_entry_id === this.insteon.config_entry.entry_id &&
-        INCLUDED_DOMAINS.includes(computeDomain(entity.entity_id)),
-    );
+    try {
+      const allEntities = await fetchEntityRegistry(this.hass.connection);
+      this._entityRegistryEntries = allEntities.filter(
+        (entity) =>
+          entity.entity_category === null &&
+          entity.config_entry_id === this.insteon.config_entry.entry_id &&
+          INCLUDED_DOMAINS.includes(computeDomain(entity.entity_id)),
+      );
+    } catch (error: unknown) {
+      this._showError(error);
+    }
   }
 
   private _showEditorArea(name, devices) {
@@ -243,6 +287,8 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
           ></ha-textfield>
         </div>
       </ha-card>
+
+      ${this._showControllers()}
 
       <ha-config-section vertical .isWide=${this.isWide}>
         <div slot="header">${this.insteon.localize("scenes.scene.devices.header")}</div>
@@ -306,6 +352,191 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
       </ha-config-section>`;
   }
 
+  private _showControllers(): TemplateResult {
+    if (this._controllersLoading) {
+      return html`<ha-spinner active></ha-spinner>`;
+    }
+    if (!this._controllersSupported) {
+      return html`<ha-alert
+        >${this.insteon.localize("scenes.scene.controllers.upgrade")}</ha-alert
+      >`;
+    }
+    const controllers = this._scene?.controllers || [];
+    const selected = this._controllerDevices.find(
+      (device) => normalizeAddress(device.address) === normalizeAddress(this._controllerAddress),
+    );
+    const deviceOptions = this._controllerDevices.map((device) => ({
+      value: device.address,
+      label: device.name,
+    }));
+    const groupOptions = (selected?.controller_groups || []).map((group) => ({
+      value: String(group),
+      label: buttonTitle(
+        plateLayout(selected?.cat, selected?.subcat),
+        group,
+        this.insteon.localize,
+      ),
+    }));
+    const hasBatteryController = controllers.some((controller) =>
+      this._controllerDevices.some(
+        (device) =>
+          normalizeAddress(device.address) === normalizeAddress(controller.address) &&
+          device.is_battery,
+      ),
+    );
+    return html`
+      <ha-card outlined .header=${this.insteon.localize("scenes.scene.controllers.header")}>
+        <div class="card-content">
+          <ha-selector-select
+            .hass=${this.hass}
+            .label=${this.insteon.localize("scenes.scene.controllers.type")}
+            .value=${this._deviceControlled ? "device" : "app"}
+            .selector=${{
+              select: {
+                mode: "dropdown",
+                options: [
+                  {
+                    value: "app",
+                    label: this.insteon.localize("scenes.scene.controllers.app_only"),
+                  },
+                  {
+                    value: "device",
+                    label: this.insteon.localize("scenes.scene.controllers.device_controlled"),
+                  },
+                ],
+              },
+            } satisfies SelectSelector}
+            @value-changed=${this._sceneTypeChanged}
+          ></ha-selector-select>
+          <p>${this.insteon.localize("scenes.scene.controllers.introduction")}</p>
+          ${this._scene?.pending
+            ? html`<ha-alert alert-type="warning"
+                >${this.insteon.localize("scenes.scene.controllers.pending")}</ha-alert
+              >`
+            : ""}
+          ${this._deviceControlled
+            ? html`
+                <ha-alert>${this.insteon.localize("scenes.scene.controllers.local_load")}</ha-alert>
+                ${controllers.map((controller) => {
+                  const device = this._controllerDevices.find(
+                    (candidate) =>
+                      normalizeAddress(candidate.address) === normalizeAddress(controller.address),
+                  );
+                  return html`
+                    <div class="controller-row">
+                      <span>
+                        ${device?.name || controller.address} -
+                        ${buttonTitle(
+                          plateLayout(device?.cat, device?.subcat),
+                          controller.group,
+                          this.insteon.localize,
+                        )}
+                      </span>
+                      <ha-icon-button
+                        .path=${mdiDelete}
+                        .label=${this.insteon.localize("scenes.scene.controllers.remove")}
+                        @click=${() => this._removeController(controller.address, controller.group)}
+                      ></ha-icon-button>
+                    </div>
+                  `;
+                })}
+                <ha-selector-select
+                  .hass=${this.hass}
+                  .label=${this.insteon.localize("scenes.scene.controllers.device")}
+                  .value=${this._controllerAddress}
+                  .selector=${{
+                    select: { mode: "dropdown", options: deviceOptions },
+                  } satisfies SelectSelector}
+                  @value-changed=${this._controllerDeviceChanged}
+                ></ha-selector-select>
+                <ha-selector-select
+                  .hass=${this.hass}
+                  .label=${this.insteon.localize("scenes.scene.controllers.button")}
+                  .value=${this._controllerGroup}
+                  .disabled=${!selected}
+                  .selector=${{
+                    select: { mode: "dropdown", options: groupOptions },
+                  } satisfies SelectSelector}
+                  @value-changed=${this._controllerGroupChanged}
+                ></ha-selector-select>
+                ${selected?.is_battery || hasBatteryController
+                  ? html`<ha-alert alert-type="warning"
+                      >${this.insteon.localize("scenes.scene.controllers.wake")}</ha-alert
+                    >`
+                  : ""}
+                <ha-button
+                  .disabled=${!selected || !this._controllerGroup}
+                  @click=${this._addController}
+                  >${this.insteon.localize("scenes.scene.controllers.add")}</ha-button
+                >
+              `
+            : ""}
+        </div>
+      </ha-card>
+    `;
+  }
+
+  private _sceneTypeChanged(ev: CustomEvent<{ value: string }>): void {
+    this._deviceControlled = ev.detail.value === "device";
+    this._dirty = true;
+  }
+
+  private _controllerDeviceChanged(ev: CustomEvent<{ value: string }>): void {
+    this._controllerAddress = ev.detail.value;
+    this._controllerGroup = "";
+  }
+
+  private _controllerGroupChanged(ev: CustomEvent<{ value: string }>): void {
+    this._controllerGroup = ev.detail.value;
+  }
+
+  private _addController(): void {
+    const group = Number(this._controllerGroup);
+    const device = this._controllerDevices.find(
+      (candidate) => candidate.address === this._controllerAddress,
+    );
+    if (!device?.controller_groups?.includes(group) || !this._scene) {
+      this._errors = this.insteon.localize("scenes.scene.controllers.invalid");
+      return;
+    }
+    const controllers = this._scene.controllers || [];
+    if (
+      controllers.some(
+        (controller) =>
+          normalizeAddress(controller.address) === normalizeAddress(device.address) &&
+          controller.group === group,
+      )
+    ) {
+      this._errors = this.insteon.localize("scenes.scene.controllers.duplicate");
+      return;
+    }
+    this._scene = {
+      ...this._scene,
+      controllers: [...controllers, { address: device.address, group }],
+    };
+    this._dirty = true;
+    this._errors = undefined;
+    this._controllerAddress = "";
+    this._controllerGroup = "";
+  }
+
+  private _removeController(address: string, group: number): void {
+    this._scene = {
+      ...this._scene!,
+      controllers: (this._scene?.controllers || []).filter(
+        (controller) => controller.address !== address || controller.group !== group,
+      ),
+    };
+    this._dirty = true;
+  }
+
+  private _showError(error: unknown): void {
+    this._errors =
+      typeof error === "object" && error !== null && "message" in error
+        ? String(error.message)
+        : this.insteon.localize("common.error.scene_write");
+  }
+
   private _setSceneDevices(): InsteonSceneDevice[] {
     const outputDevices: InsteonSceneDevice[] = [];
     if (!this._scene) {
@@ -358,6 +589,7 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
       name: this.insteon.localize("scenes.scene.default_name"),
       devices: {},
       group: -1,
+      controllers: [],
     };
   }
 
@@ -458,18 +690,13 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
   }
 
   private async _loadScene() {
-    // let config: SceneConfig;
-    this._scene = await fetchInsteonScene(this.hass, +this.sceneId!);
-    for (const address in Object.keys(this._scene.devices)) {
-      const ha_device = this._deviceRegistryEntries.find(
-        (haDevice) => haDevice.identifiers[0][1] === address,
-      );
-      const device_id = ha_device?.id || undefined;
-      if (device_id) {
-        this._pickDevice(device_id);
-      }
+    try {
+      this._scene = await fetchInsteonScene(this.hass, +this.sceneId!);
+      this._deviceControlled = (this._scene.controllers?.length || 0) > 0;
+      this._dirty = !!this._scene.pending;
+    } catch (error: unknown) {
+      this._showError(error);
     }
-    this._dirty = false;
   }
 
   private _pickDevice(deviceId: string) {
@@ -603,7 +830,7 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
     if (this._dirty) {
       const action = showConfirmationDialog(this, {
         title: this.insteon!.localize("common.unsaved.title"),
-        text: this.insteon!.localize("scene.unsaved.message"),
+        text: this.insteon!.localize("scenes.unsaved.message"),
         confirmText: this.insteon!.localize("common.leave"),
         dismissText: this.insteon!.localize("common.stay"),
         destructive: true,
@@ -629,19 +856,28 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
   private async _delete(): Promise<void> {
     this._saving = true;
     const sceneId: number = +this.sceneId!;
-    const result = await deleteInsteonScene(this.hass, sceneId!);
-    this._saving = false;
-    if (!result.result) {
-      showAlertDialog(this, {
-        text: this.insteon!.localize("common.error.scene_write"),
-        confirmText: this.insteon!.localize("common.close"),
-      });
-      history.back();
+    try {
+      const result = await deleteInsteonScene(this.hass, sceneId);
+      if (!result.result) {
+        this._errors = this.insteon.localize("scenes.scene.controllers.pending");
+        return;
+      }
+      this._goBack();
+    } catch (error: unknown) {
+      this._showError(error);
+    } finally {
+      this._saving = false;
     }
-    history.back();
   }
 
   private async _saveScene(): Promise<void> {
+    if (this._saving) {
+      return;
+    }
+    if (this._deviceControlled && !this._scene?.controllers?.length) {
+      this._errors = this.insteon.localize("scenes.scene.controllers.required");
+      return;
+    }
     if (!this._checkDeviceEntitySelections()) {
       showAlertDialog(this, {
         text: this.insteon!.localize("common.error.scene_device_no_entities"),
@@ -664,17 +900,39 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
         links.push(link);
       });
     });
-    const result = await saveInsteonScene(this.hass, this._scene!.group, links, this._scene!.name);
-    this._saving = false;
-    this._dirty = false;
-    if (!result.result) {
-      showAlertDialog(this, {
-        text: this.insteon!.localize("common.error.scene_write"),
-        confirmText: this.insteon!.localize("common.close"),
-      });
-      history.back();
-    } else if (!this.sceneId) {
-      navigate(`/insteon/scene/${result.scene_id}`, { replace: true });
+    this._errors = undefined;
+    try {
+      const result = await saveInsteonScene(
+        this.hass,
+        this._scene!.group,
+        links,
+        this._scene!.name,
+        this._controllersSupported
+          ? this._deviceControlled
+            ? this._scene!.controllers
+            : []
+          : undefined,
+      );
+      this._scene = { ...this._scene!, group: result.scene_id, pending: !result.result };
+      // A failed new-scene write still reserves its modem group for retry.
+      if (!this.sceneId) {
+        this.sceneId = String(result.scene_id);
+        navigate(`/insteon/scene/${result.scene_id}`, { replace: true });
+      }
+      if (!result.result) {
+        this._dirty = true;
+        this._errors = this.insteon.localize("scenes.scene.controllers.pending");
+        return;
+      }
+      if (!this._deviceControlled) {
+        this._scene = { ...this._scene, controllers: [] };
+      }
+      this._dirty = false;
+    } catch (error: unknown) {
+      this._dirty = true;
+      this._showError(error);
+    } finally {
+      this._saving = false;
     }
   }
 
@@ -702,6 +960,15 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
           padding: 20px;
           font-weight: bold;
           color: var(--error-color);
+        }
+        .controller-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        ha-selector-select {
+          display: block;
+          margin-bottom: 16px;
         }
         ha-config-section:last-child {
           padding-bottom: 20px;

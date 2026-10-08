@@ -5,6 +5,13 @@ export interface InsteonScene {
   name: string;
   group: number;
   devices: { [address: string]: InsteonSceneDeviceData[] };
+  controllers?: InsteonSceneController[];
+  pending?: boolean;
+}
+
+export interface InsteonSceneController {
+  address: string;
+  group: number;
 }
 
 export interface InsteonScenes {
@@ -47,12 +54,14 @@ export const saveInsteonScene = (
   scene_id: number,
   links: InsteonSceneLinkData[],
   scene_name: string,
+  controllers?: InsteonSceneController[],
 ): Promise<SceneSaveResult> =>
   hass.callWS({
     type: "insteon/scene/save",
     name: scene_name,
     scene_id: scene_id,
     links: links,
+    ...(controllers === undefined ? {} : { controllers }),
   });
 
 export const deleteInsteonScene = (

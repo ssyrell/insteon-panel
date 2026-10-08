@@ -90,11 +90,23 @@ export class InsteonScenesPanel extends LitElement {
         direction: "asc",
         showNarrow: true,
       },
+      controllers: {
+        title: this.insteon.localize("scenes.fields.controllers"),
+        template: (scene: InsteonScene) => html`
+          ${scene.controllers?.length
+            ? scene.controllers
+                .map((controller) => `${controller.address} / ${controller.group}`)
+                .join(", ")
+            : this.insteon.localize("scenes.scene.controllers.app_only")}
+        `,
+        showNarrow: false,
+      },
       actions: {
         title: this.insteon.localize("scenes.fields.actions"),
         type: "flex",
         template: (scene) => html`
           <ha-icon-button
+            .disabled=${scene.pending}
             .scene=${scene}
             .hass=${this.hass}
             .label=${this.insteon.localize("scenes.scene.activate")}
@@ -102,6 +114,7 @@ export class InsteonScenesPanel extends LitElement {
             @click=${this._activateScene}
           ></ha-icon-button>
           <ha-icon-button
+            .disabled=${scene.pending}
             .scene=${scene}
             .hass=${this.hass}
             .label=${this.insteon.localize("scenes.scene.deactivate")}
