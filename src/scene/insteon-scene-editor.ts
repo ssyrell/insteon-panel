@@ -444,6 +444,7 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
                   .hass=${this.hass}
                   .label=${this.insteon.localize("scenes.scene.controllers.device")}
                   .value=${this._controllerAddress}
+                  .required=${false}
                   .selector=${{
                     select: { mode: "dropdown", options: deviceOptions },
                   } satisfies SelectSelector}
@@ -453,6 +454,7 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
                   .hass=${this.hass}
                   .label=${this.insteon.localize("scenes.scene.controllers.button")}
                   .value=${this._controllerGroup}
+                  .required=${false}
                   .disabled=${!selected}
                   .selector=${{
                     select: { mode: "dropdown", options: groupOptions },
@@ -476,18 +478,22 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
     `;
   }
 
-  private _sceneTypeChanged(ev: CustomEvent<{ value: string }>): void {
+  // ha-select emits an undefined value when it is cleared or its options change.
+  private _sceneTypeChanged(ev: CustomEvent<{ value?: string }>): void {
+    if (ev.detail.value === undefined) {
+      return;
+    }
     this._deviceControlled = ev.detail.value === "device";
     this._dirty = true;
   }
 
-  private _controllerDeviceChanged(ev: CustomEvent<{ value: string }>): void {
-    this._controllerAddress = ev.detail.value;
+  private _controllerDeviceChanged(ev: CustomEvent<{ value?: string }>): void {
+    this._controllerAddress = ev.detail.value ?? "";
     this._controllerGroup = "";
   }
 
-  private _controllerGroupChanged(ev: CustomEvent<{ value: string }>): void {
-    this._controllerGroup = ev.detail.value;
+  private _controllerGroupChanged(ev: CustomEvent<{ value?: string }>): void {
+    this._controllerGroup = ev.detail.value ?? "";
   }
 
   private _addController(): void {

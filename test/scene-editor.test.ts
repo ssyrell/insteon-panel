@@ -38,6 +38,8 @@ vi.mock("../src/device/insteon-device-picker", () => ({}));
 
 import { fetchDeviceRegistry } from "@ha/data/device_registry";
 import type { DeviceRegistryEntry } from "@ha/data/device_registry";
+import { fetchEntityRegistry } from "@ha/data/entity_registry";
+import type { EntityRegistryEntry } from "@ha/data/entity_registry";
 import { navigate } from "@ha/common/navigate";
 import { localize } from "../src/localize/localize";
 import { InsteonSceneEditor } from "../src/scene/insteon-scene-editor";
@@ -152,7 +154,11 @@ const mount = async (
   return { element, callWS, save };
 };
 
-const select = async (element: InsteonSceneEditor, index: number, value: string): Promise<void> => {
+const select = async (
+  element: InsteonSceneEditor,
+  index: number,
+  value: string | undefined,
+): Promise<void> => {
   element
     .shadowRoot!.querySelectorAll("ha-selector-select")
     [index].dispatchEvent(new CustomEvent("value-changed", { detail: { value } }));
@@ -195,6 +201,49 @@ describe("scene controllers", () => {
     await saveScene(element);
     expect(callWS).toHaveBeenCalledWith(
       expect.objectContaining({ controllers: [{ address: remote.address, group: 2 }] }),
+    );
+  });
+
+  it("adds responders after selectors report cleared values", async () => {
+    vi.mocked(fetchEntityRegistry).mockResolvedValueOnce([
+      {
+        entity_id: "light.keypad_main",
+        device_id: "keypad",
+        config_entry_id: "entry",
+        entity_category: null,
+        unique_id: "222222_1",
+        name: null,
+        original_name: "Keypad main",
+      } as EntityRegistryEntry,
+    ]);
+    const { element, callWS } = await mount();
+    await select(element, 0, "device");
+    await select(element, 1, remote.address);
+    await select(element, 2, "1");
+    await add(element);
+    await select(element, 1, undefined);
+    await select(element, 2, undefined);
+    await select(element, 0, undefined);
+
+    element
+      .shadowRoot!.querySelector("insteon-device-picker")!
+      .dispatchEvent(new CustomEvent("value-changed", { detail: { value: "keypad" } }));
+    await settle(element);
+
+    expect(element.shadowRoot!.textContent).toContain("Keypad main");
+    expect(element._scene!.devices).toEqual({ "22.22.22": [] });
+    const checkbox = element.shadowRoot!.querySelector("ha-checkbox") as HTMLElement & {
+      checked: boolean;
+    };
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event("change"));
+    await settle(element);
+    await saveScene(element);
+    expect(callWS).toHaveBeenCalledWith(
+      expect.objectContaining({
+        controllers: [{ address: remote.address, group: 1 }],
+        links: [{ address: "22.22.22", data1: 0, data2: 0, data3: 1 }],
+      }),
     );
   });
 
