@@ -231,6 +231,9 @@ describe("scene controllers", () => {
     await settle(element);
 
     expect(element.shadowRoot!.textContent).toContain("Keypad main");
+    expect(
+      element.shadowRoot!.querySelector("h1.card-header")!.parentElement!.textContent,
+    ).not.toContain(";");
     expect(element._scene!.devices).toEqual({ "22.22.22": [] });
     const checkbox = element.shadowRoot!.querySelector("ha-checkbox") as HTMLElement & {
       checked: boolean;

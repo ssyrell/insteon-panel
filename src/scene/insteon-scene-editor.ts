@@ -332,7 +332,7 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
                         ></ha-switch>
                       </paper-icon-item>
                     `,
-                  )};
+                  )}
             </ha-card>
           `,
         )}
