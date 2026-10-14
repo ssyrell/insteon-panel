@@ -16,9 +16,11 @@ remotes before saving or deleting. If a write fails, some devices may already ha
 changed: keep the scene open and retry. Interrupted scenes remain available after
 restart with their reserved scene number.
 
-A controller can also respond to Home Assistant or another controller. Pressing its
-own button controls its local load using the device's local settings; the scene
-editor does not create self-links or change those settings.
+Controller buttons on lighting devices also respond when Home Assistant or another
+controller turns the scene on, so their loads and keypad button lights stay in sync.
+Unless you set a level for the controller in the scene, its load uses its local
+on-level and ramp rate. Pressing a controller's own button always uses its local
+settings; the scene editor does not create self-links or change those settings.
 
 This feature requires the matching Insteon WebSocket API changes in Home Assistant
 and the device-controlled scene implementation in `pyinsteon`. For local development,

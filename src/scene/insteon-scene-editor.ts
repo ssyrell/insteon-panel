@@ -935,6 +935,10 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
         this._scene = { ...this._scene, controllers: [] };
       }
       this._dirty = false;
+      if (this._deviceControlled) {
+        // Show controller buttons that the hardware scene added as responders.
+        await this._loadScene();
+      }
     } catch (error: unknown) {
       this._dirty = true;
       this._showError(error);

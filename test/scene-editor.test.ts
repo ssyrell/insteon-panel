@@ -126,15 +126,25 @@ const mount = async (
   })),
 ) => {
   vi.mocked(fetchDeviceRegistry).mockResolvedValue(registry);
+  let stored = existing;
   const callWS = vi.fn(async (message: Record<string, unknown>) => {
     if (message.type === "insteon/device/get") {
       return message.device_id === "remote" ? remote : keypad;
     }
     if (message.type === "insteon/scene/get") {
-      return structuredClone(existing);
+      return structuredClone(stored);
     }
     if (message.type === "insteon/scene/save") {
-      return save(message);
+      const result = await save(message);
+      if (result.result) {
+        stored = {
+          name: message.name as string,
+          group: result.scene_id,
+          devices: stored?.devices ?? {},
+          controllers: (message.controllers as InsteonScene["controllers"]) ?? [],
+        };
+      }
+      return result;
     }
     if (message.type === "insteon/scene/delete") {
       return { scene_id: 20, result: false };
@@ -203,6 +213,8 @@ describe("scene controllers", () => {
     expect(callWS).toHaveBeenCalledWith(
       expect.objectContaining({ controllers: [{ address: remote.address, group: 2 }] }),
     );
+    expect(callWS).toHaveBeenLastCalledWith({ type: "insteon/scene/get", scene_id: 20 });
+    expect(element._scene!.controllers).toEqual([{ address: remote.address, group: 2 }]);
   });
 
   it("adds responders after selectors report cleared values", async () => {
