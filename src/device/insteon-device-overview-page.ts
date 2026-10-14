@@ -21,7 +21,7 @@ import "@ha/layouts/hass-tabs-subpage";
 import { navigate } from "@ha/common/navigate";
 import { showAlertDialog, showConfirmationDialog } from "@ha/dialogs/generic/show-dialog-box";
 import { haStyle } from "@ha/resources/styles";
-import { insteonDeviceTabs } from "./insteon-device-router";
+import { deviceTabs } from "./device-tabs";
 import "./insteon-device-header";
 import "./insteon-device-plate";
 import { buttonLabel, buttonTitle, plateGroups, plateLayout } from "./plate-layout";
@@ -92,6 +92,8 @@ class InsteonDeviceOverviewPage extends LitElement {
   private _unsubscribe?: Promise<() => Promise<void>>;
 
   private _watchTimeout?: number;
+
+  private _tabs = memoizeOne((deviceId: string) => deviceTabs(this.insteon.localize, deviceId));
 
   private _attributed = memoizeOne(
     (
@@ -410,7 +412,7 @@ class InsteonDeviceOverviewPage extends LitElement {
         .hass=${this.hass}
         .narrow=${this.narrow!}
         .route=${this.route!}
-        .tabs=${insteonDeviceTabs}
+        .tabs=${this._tabs(this.deviceId ?? "")}
         .localizeFunc=${this.insteon.localize}
         .backCallback=${this._handleBackTapped}
       >
