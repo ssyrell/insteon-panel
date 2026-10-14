@@ -1,6 +1,7 @@
 import type { ActionDetail } from "@material/mwc-list/mwc-list-foundation";
 import { mdiContentSave, mdiDelete, mdiDotsVertical } from "@mdi/js";
 import "@ha/components/ha-list-item";
+import "@ha/components/ha-button-menu";
 import "@polymer/paper-item/paper-icon-item";
 import "@polymer/paper-item/paper-item";
 import "@polymer/paper-item/paper-item-body";

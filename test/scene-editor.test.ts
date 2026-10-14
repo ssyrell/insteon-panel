@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@ha/components/ha-list-item", () => ({}));
+vi.mock("@ha/components/ha-button-menu", () => ({}));
 vi.mock("@polymer/paper-item/paper-icon-item", () => ({}));
 vi.mock("@polymer/paper-item/paper-item", () => ({}));
 vi.mock("@polymer/paper-item/paper-item-body", () => ({}));
