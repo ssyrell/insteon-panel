@@ -43,20 +43,20 @@
       "controllers": {
         "header": "Scene controllers",
         "type": "Scene type",
-        "app_only": "App-only",
-        "device_controlled": "Device-controlled",
+        "app_only": "Home Assistant Only",
+        "device_controlled": "Device + Home Assistant",
         "introduction": "Home Assistant can always control this scene. Add hardware buttons to control it directly without Home Assistant.",
         "device": "Controller device",
         "button": "Controller button",
         "add": "Add controller",
         "remove": "Remove controller",
-        "required": "Add at least one controller, or select App-only.",
+        "required": "Add at least one controller, or select Home Assistant Only.",
         "invalid": "Select a valid controller device and button.",
         "duplicate": "This controller button is already in the scene.",
         "wake": "Wake battery-operated controllers before saving or deleting the scene. Read their complete All-Link Database before saving.",
         "local_load": "A controller's own load follows its local button settings when pressed. Scene settings apply to its load when controlled by Home Assistant or another device; self-links are not created.",
         "pending": "The scene was not fully written. Some devices may already have changed. Wake battery devices, read missing All-Link Databases, and save again or retry deletion to finish.",
-        "upgrade": "Device-controlled scenes require an updated Insteon integration and pyinsteon library."
+        "upgrade": "Device + Home Assistant scenes require an updated Insteon integration and pyinsteon library."
       },
       "devices": {
         "header": "Add device",

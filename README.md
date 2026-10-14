@@ -2,10 +2,11 @@
 
 This repository holds the frontend files of Insteon configuration panel in home assistant.
 
-## Device-controlled scenes
+## Device + Home Assistant scenes
 
-In the scene editor, choose **App-only** for the existing modem-controlled behavior,
-or **Device-controlled** to add one or more hardware devices and their buttons.
+In the scene editor, choose **Home Assistant Only** for the existing modem-controlled
+behavior, or **Device + Home Assistant** to add one or more hardware devices and their
+buttons.
 Home Assistant remains a controller in both cases. Adding responders or changing
 their levels and ramp rates updates every associated hardware group.
 
