@@ -22,6 +22,14 @@ Unless you set a level for the controller in the scene, its load uses its local
 on-level and ramp rate. Pressing a controller's own button always uses its local
 settings; the scene editor does not create self-links or change those settings.
 
+To bring scenes created outside Home Assistant (for example by manual linking or
+Insteon Director) under management, open **Utilities > Import device scenes**. Read the
+All-Link Databases of the involved devices first. Buttons that control the same devices
+(including each other) with the same levels are listed as one scene. Importing keeps the
+existing device links, adds a modem scene so Home Assistant can control it, and opens it
+in the scene editor. Scenes with conflicting or unreadable links are listed with the
+reason they cannot be imported.
+
 This feature requires the matching Insteon WebSocket API changes in Home Assistant
 and the device-controlled scene implementation in `pyinsteon`. For local development,
 mount the `pyinsteon` feature worktree in the core devcontainer and install it with

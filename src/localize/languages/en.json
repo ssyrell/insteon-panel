@@ -153,6 +153,21 @@
       "scanning": "Reading every device's link database",
       "none": "Every device is linked to the modem"
     },
+    "device_scenes": {
+      "caption": "Import device scenes",
+      "no_data": "No device-controlled scenes to import. Read the All-Link Databases of all devices to find scenes created outside Home Assistant.",
+      "fields": {
+        "controllers": "Controllers",
+        "responders": "Responders",
+        "status": "Status"
+      },
+      "ready": "Ready to import",
+      "import": "Import",
+      "name": "Scene name",
+      "import_title": "Import device scene",
+      "import_text": "Home Assistant will control this scene too. Existing device links are kept and a modem scene is added.",
+      "failed": "The scene could not be imported."
+    },
     "unknown_devices": {
       "caption": "Unknown Devices",
       "fields": {

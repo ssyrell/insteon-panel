@@ -64,6 +64,29 @@ export const saveInsteonScene = (
     ...(controllers === undefined ? {} : { controllers }),
   });
 
+export interface InsteonDeviceScene {
+  controllers: InsteonSceneController[];
+  links: InsteonSceneLinkData[];
+  issues: string[];
+  importable: boolean;
+}
+
+export const fetchInsteonDeviceScenes = (hass: HomeAssistant): Promise<InsteonDeviceScene[]> =>
+  hass.callWS({
+    type: "insteon/scenes/device_scenes",
+  });
+
+export const importInsteonDeviceScene = (
+  hass: HomeAssistant,
+  controllers: InsteonSceneController[],
+  scene_name: string,
+): Promise<SceneSaveResult> =>
+  hass.callWS({
+    type: "insteon/scene/import",
+    name: scene_name,
+    controllers,
+  });
+
 export const deleteInsteonScene = (
   hass: HomeAssistant,
   scene_id: number,
