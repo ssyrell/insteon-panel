@@ -21,6 +21,7 @@ vi.mock("@ha/components/ha-checkbox", () => ({}));
 vi.mock("@ha/components/ha-switch", () => ({}));
 vi.mock("@ha/components/ha-alert", () => ({}));
 vi.mock("@ha/components/ha-button", () => ({}));
+vi.mock("@ha/components/ha-spinner", () => ({}));
 vi.mock("@ha/components/ha-selector/ha-selector-select", () => ({}));
 vi.mock("@ha/components/ha-form/ha-form", () => ({}));
 vi.mock("@ha/panels/config/ha-config-section", () => ({}));
@@ -327,6 +328,62 @@ describe("scene controllers", () => {
     const { element } = await mount({ ...scene, pending: true });
     expect(element.shadowRoot!.textContent).toContain("not fully written");
     expect(element.shadowRoot!.querySelector("ha-fab")!.classList.contains("dirty")).toBe(true);
+  });
+
+  it("shows levels of set-button links that store output 0", async () => {
+    vi.mocked(fetchEntityRegistry).mockResolvedValueOnce([
+      {
+        entity_id: "light.keypad_main",
+        device_id: "keypad",
+        config_entry_id: "entry",
+        entity_category: null,
+        unique_id: "222222_1",
+        name: null,
+        original_name: "Keypad main",
+      } as EntityRegistryEntry,
+    ]);
+    const { element, callWS } = await mount({
+      ...scene,
+      devices: {
+        "22.22.22": [
+          { data1: 191, data2: 28, data3: 0, has_controller: true, has_responder: true },
+        ],
+      },
+    });
+    const checkbox = element.shadowRoot!.querySelector("ha-checkbox") as HTMLElement & {
+      checked: boolean;
+    };
+    const toggle = element.shadowRoot!.querySelector("ha-switch") as HTMLElement & {
+      checked: boolean;
+    };
+    expect(checkbox.checked).toBe(true);
+    expect(toggle.checked).toBe(true);
+    expect(element.shadowRoot!.textContent).toContain("75% · 0.5 s ramp");
+    expect(element.shadowRoot!.querySelector("ha-fab")!.classList.contains("dirty")).toBe(false);
+    await saveScene(element);
+    expect(callWS).toHaveBeenCalledWith(
+      expect.objectContaining({
+        links: [{ address: "22.22.22", data1: 191, data2: 28, data3: 1 }],
+      }),
+    );
+  });
+
+  it("explains that the scene is saving", async () => {
+    let finish!: (result: SceneSaveResult) => void;
+    const write = vi.fn(
+      () =>
+        new Promise<SceneSaveResult>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { element } = await mount(scene, write);
+    await saveScene(element);
+    const saving = element.shadowRoot!.querySelector(".saving")!;
+    expect(saving.querySelector("ha-spinner")).not.toBeNull();
+    expect(saving.textContent).toContain("Saving scene data");
+    finish({ scene_id: 20, result: true });
+    await settle(element);
+    expect(element.shadowRoot!.querySelector(".saving")).toBeNull();
   });
 
   it("preserves the legacy save shape when controllers are omitted", async () => {

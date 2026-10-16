@@ -25,6 +25,7 @@ import "@ha/components/ha-checkbox";
 import "@ha/components/ha-switch";
 import "@ha/components/ha-alert";
 import "@ha/components/ha-button";
+import "@ha/components/ha-spinner";
 import "@ha/components/ha-selector/ha-selector-select";
 import { computeDeviceName } from "@ha/common/entity/compute_device_name";
 import type { DeviceRegistryEntry } from "@ha/data/device_registry";
@@ -38,7 +39,7 @@ import { haStyle } from "@ha/resources/styles";
 import type { HomeAssistant, Route } from "@ha/types";
 import "@ha/panels/config/ha-config-section";
 import type { Insteon, InsteonDevice } from "../data/insteon";
-import { fetchInsteonDevice } from "../data/device";
+import { fetchInsteonDevice, RAMP_RATE_SECONDS } from "../data/device";
 import { insteonAddress, normalizeAddress } from "../device/registry-lookup";
 import { buttonTitle, plateLayout } from "../device/plate-layout";
 import type { InsteonScene, InsteonSceneDeviceData, InsteonSceneLinkData } from "../data/scene";
@@ -112,6 +113,8 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
 
   @state() private _saving = false;
 
+  @state() private _deleting = false;
+
   @state() private _controllerDevices: InsteonDevice[] = [];
 
   @state() private _controllersLoading = true;
@@ -157,6 +160,32 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
     if (changedProps.has("_deviceRegistryEntries") || changedProps.has("_entityRegistryEntries")) {
       this._mapDeviceEntities();
     }
+    if (
+      (changedProps.has("_scene") ||
+        changedProps.has("_deviceRegistryEntries") ||
+        changedProps.has("_entityRegistryEntries")) &&
+      this._normalizeOutputs()
+    ) {
+      this.requestUpdate();
+    }
+  }
+
+  // Links made with set buttons store output 0 on single-output devices.
+  private _normalizeOutputs(): boolean {
+    let changed = false;
+    for (const [address, links] of Object.entries(this._scene?.devices || {})) {
+      const groups = Object.keys(this._insteonToHaDeviceMap[address]?.entities || {});
+      if (groups.length !== 1) {
+        continue;
+      }
+      for (const link of links) {
+        if (link.data3 === 0) {
+          link.data3 = +groups[0];
+          changed = true;
+        }
+      }
+    }
+    return changed;
   }
 
   protected render(): TemplateResult {
@@ -218,8 +247,13 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
         >
           <ha-config-section vertical .isWide=${this.isWide}>
             ${this._saving
-              ? html`<div>
-                  <ha-spinner active alt="Loading"></ha-spinner>
+              ? html`<div class="saving" role="status">
+                  <ha-spinner size="large"></ha-spinner>
+                  <span
+                    >${this.insteon.localize(
+                      this._deleting ? "scenes.scene.deleting" : "scenes.scene.saving",
+                    )}</span
+                  >
                 </div>`
               : this._showEditorArea(name, devices)}
           </ha-config-section>
@@ -319,11 +353,15 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
                           .group=${entity.data3}
                         ></ha-checkbox>
                         <paper-item-body
+                          ?two-line=${!!this._levelSummary(entity)}
                           @click=${this._showSetOnLevel}
                           .device_address=${device.address}
                           .group=${entity.data3}
                         >
-                          ${entity.name}
+                          <div>${entity.name}</div>
+                          ${this._levelSummary(entity)
+                            ? html`<div secondary>${this._levelSummary(entity)}</div>`
+                            : ""}
                         </paper-item-body>
                         <ha-switch
                           .checked=${entity.data1 > 0}
@@ -351,6 +389,21 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
           </div>
         </ha-card>
       </ha-config-section>`;
+  }
+
+  private _levelSummary(entity: InsteonSceneEntity): string {
+    if (
+      !entity.is_in_scene ||
+      entity.data1 === 0 ||
+      !DIMMABLE_DOMAINS.includes(computeDomain(entity.entity_id))
+    ) {
+      return "";
+    }
+    const ramp = Object.entries(RAMP_RATE_SECONDS).find(([, value]) => value === entity.data2);
+    return this.insteon.localize("scenes.scene.devices.level_summary", {
+      level: Math.round((entity.data1 * 100) / 255),
+      ramp: ramp ? ramp[0] : entity.data2,
+    });
   }
 
   private _showControllers(): TemplateResult {
@@ -862,6 +915,7 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
 
   private async _delete(): Promise<void> {
     this._saving = true;
+    this._deleting = true;
     const sceneId: number = +this.sceneId!;
     try {
       const result = await deleteInsteonScene(this.hass, sceneId);
@@ -874,6 +928,7 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
       this._showError(error);
     } finally {
       this._saving = false;
+      this._deleting = false;
     }
   }
 
@@ -971,6 +1026,15 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
           padding: 20px;
           font-weight: bold;
           color: var(--error-color);
+        }
+        .saving {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 16px;
+          min-height: 50vh;
+          text-align: center;
         }
         .controller-row {
           display: flex;

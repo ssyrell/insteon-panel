@@ -1,5 +1,5 @@
-import type { TemplateResult } from "lit";
-import { LitElement, html } from "lit";
+import type { CSSResultGroup, TemplateResult } from "lit";
+import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import memoizeOne from "memoize-one";
 import type {
@@ -8,6 +8,8 @@ import type {
 } from "@ha/components/data-table/ha-data-table";
 import "@ha/layouts/hass-tabs-subpage-data-table";
 import "@ha/components/ha-button";
+import "@ha/components/ha-dialog";
+import "@ha/components/ha-spinner";
 import { computeDeviceName } from "@ha/common/entity/compute_device_name";
 import type { DeviceRegistryEntry } from "@ha/data/device_registry";
 import { fetchDeviceRegistry } from "@ha/data/device_registry";
@@ -179,6 +181,31 @@ export class DeviceScenesPanel extends LitElement {
         backPath="/insteon/utils"
       >
       </hass-tabs-subpage-data-table>
+      ${this._importing
+        ? html`<ha-dialog
+            open
+            scrimClickAction=""
+            escapeKeyAction=""
+            .heading=${this.insteon.localize("utils.device_scenes.importing_title")}
+          >
+            <div class="progress" role="status">
+              <ha-spinner size="large"></ha-spinner>
+              <span>${this.insteon.localize("utils.device_scenes.importing_text")}</span>
+            </div>
+          </ha-dialog>`
+        : nothing}
+    `;
+  }
+
+  static get styles(): CSSResultGroup {
+    return css`
+      .progress {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        text-align: center;
+      }
     `;
   }
 }

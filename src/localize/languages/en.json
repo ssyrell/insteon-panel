@@ -38,6 +38,8 @@
       "area": "Area",
       "delete": "Delete scene",
       "save": "Save scene",
+      "saving": "Saving scene data. Writing links to each device can take a minute or two.",
+      "deleting": "Deleting scene. Removing links from each device can take a minute or two.",
       "activate": "Turn on",
       "deactivate": "Turn off",
       "controllers": {
@@ -65,7 +67,8 @@
         "add": "Add device",
         "on_level": "On level",
         "ramp_rate": "Ramp rate in seconds",
-        "button": "Button"
+        "button": "Button",
+        "level_summary": "{level}% · {ramp} s ramp"
       }
     }
   },
@@ -166,6 +169,8 @@
       "name": "Scene name",
       "import_title": "Import device scene",
       "import_text": "Home Assistant will control this scene too. Existing device links are kept and a modem scene is added.",
+      "importing_title": "Importing scene",
+      "importing_text": "Adding a modem scene and writing links to each device. This can take a minute or two.",
       "failed": "The scene could not be imported."
     },
     "unknown_devices": {

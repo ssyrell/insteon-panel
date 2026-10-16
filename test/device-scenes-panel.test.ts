@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@ha/layouts/hass-tabs-subpage-data-table", () => ({}));
 vi.mock("@ha/components/ha-button", () => ({}));
+vi.mock("@ha/components/ha-dialog", () => ({}));
+vi.mock("@ha/components/ha-spinner", () => ({}));
 vi.mock("@ha/common/entity/compute_device_name", () => ({
   computeDeviceName: (device: { name: string }) => device.name,
 }));
@@ -104,6 +106,31 @@ describe("device scenes panel", () => {
       name: "Evening",
       controllers: ready.controllers,
     });
+    expect(navigate).toHaveBeenCalledWith("/insteon/scene/21");
+  });
+
+  it("shows progress while the import runs", async () => {
+    vi.mocked(showPromptDialog).mockResolvedValue("Evening");
+    let finish!: (result: { scene_id: number; result: boolean }) => void;
+    const { element, table } = await mount((message) =>
+      message.type === "insteon/scene/import"
+        ? new Promise((resolve) => {
+            finish = resolve;
+          })
+        : Promise.resolve([ready]),
+    );
+    importButton(table, 0).dispatchEvent(new Event("click"));
+    await settle(element);
+    const dialog = element.shadowRoot!.querySelector("ha-dialog") as HTMLElement & {
+      heading: string;
+    };
+    expect(dialog.heading).toBe("Importing scene");
+    expect(dialog.querySelector("ha-spinner")).not.toBeNull();
+    expect(dialog.textContent).toContain("writing links to each device");
+    expect((importButton(table, 0) as any).disabled).toBe(true);
+    finish({ scene_id: 21, result: true });
+    await settle(element);
+    expect(element.shadowRoot!.querySelector("ha-dialog")).toBeNull();
     expect(navigate).toHaveBeenCalledWith("/insteon/scene/21");
   });
 
