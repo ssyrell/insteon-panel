@@ -20,7 +20,7 @@ import type { Insteon } from "../data/insteon";
 import type { InsteonDeviceScene } from "../data/scene";
 import { fetchInsteonDeviceScenes, importInsteonDeviceScene } from "../data/scene";
 import { catSubcatFromModel, insteonDeviceByAddress } from "../device/registry-lookup";
-import { buttonTitle, plateLayout } from "../device/plate-layout";
+import { buttonTitle, plateGroups, plateLayout } from "../device/plate-layout";
 
 interface DeviceSceneRow extends DataTableRowData {
   id: string;
@@ -71,6 +71,16 @@ export class DeviceScenesPanel extends LitElement {
     return `${name} - ${buttonTitle(plateLayout(cat, subcat), group, this.insteon.localize)}`;
   }
 
+  // Single-output devices are named without their output, which would only repeat "Load".
+  private _responder(address: string, group: number): string {
+    const entry = insteonDeviceByAddress(this._devices, address);
+    const [cat, subcat] = catSubcatFromModel(entry?.model) ?? [undefined, undefined];
+    if (entry && plateGroups(plateLayout(cat, subcat)).length === 1) {
+      return computeDeviceName(entry) || address;
+    }
+    return this._output(address, group);
+  }
+
   private _area(address: string): string | undefined {
     const areaId = insteonDeviceByAddress(this._devices, address)?.area_id;
     return areaId ? this.hass.areas?.[areaId]?.name : undefined;
@@ -98,7 +108,7 @@ export class DeviceScenesPanel extends LitElement {
           responders: scene.links
             .map(
               (link) =>
-                `${this._output(link.address, link.data3)} (${Math.round((link.data1 * 100) / 255)}%)`,
+                `${this._responder(link.address, link.data3)} (${Math.round((link.data1 * 100) / 255)}%)`,
             )
             .join(", "),
           status: scene.importable

@@ -33,6 +33,7 @@ const registry = [
   },
   { id: "light", name: "Island", model: "SwitchLinc (0x01, 0x20)", address: "44.44.44" },
   { id: "remote", name: "Remote", model: "Mini Remote (0x00, 0x10)", address: "66.66.66" },
+  { id: "lamp", name: "Lamp", model: "LampLinc (0x01, 0x0e)", address: "77.77.77" },
 ].map(
   ({ address, ...entry }) =>
     ({ ...entry, identifiers: [["insteon", address]] }) as unknown as DeviceRegistryEntry,
@@ -97,7 +98,7 @@ describe("device scenes panel", () => {
     expect(
       table.data.map((row: any) => [row.controllers, row.area, row.responders, row.status]),
     ).toEqual([
-      ["Kitchen keypad - Button C", "Kitchen", "Island - Paddle (50%)", "Ready to import"],
+      ["Kitchen keypad - Button C", "Kitchen", "Island (50%)", "Ready to import"],
       [
         "Kitchen keypad - Button D",
         "Kitchen",
@@ -107,6 +108,21 @@ describe("device scenes panel", () => {
     ]);
     expect((importButton(table, 0) as any).disabled).toBe(false);
     expect((importButton(table, 1) as any).disabled).toBe(true);
+  });
+
+  it("names single-output responders without their output", async () => {
+    const mixed: InsteonDeviceScene = {
+      ...ready,
+      links: [
+        { address: "777777", data1: 255, data2: 28, data3: 1 },
+        { address: "444444", data1: 0, data2: 28, data3: 0 },
+        { address: "222222", data1: 255, data2: 28, data3: 4 },
+      ],
+    };
+    const { table } = await mount(async () => [mixed]);
+    expect(table.data[0].responders).toBe(
+      "Lamp (100%), Island (0%), Kitchen keypad - Button D (100%)",
+    );
   });
 
   it("lists each distinct controller area and skips controllers without one", async () => {
