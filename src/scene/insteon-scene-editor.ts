@@ -41,7 +41,7 @@ import "@ha/panels/config/ha-config-section";
 import type { Insteon, InsteonDevice } from "../data/insteon";
 import { fetchInsteonDevice, RAMP_RATE_SECONDS } from "../data/device";
 import { insteonAddress, normalizeAddress } from "../device/registry-lookup";
-import { buttonTitle, plateLayout } from "../device/plate-layout";
+import { deviceButtonTitle } from "../device/plate-layout";
 import type { InsteonScene, InsteonSceneDeviceData, InsteonSceneLinkData } from "../data/scene";
 import {
   fetchInsteonScene,
@@ -425,11 +425,7 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
     }));
     const groupOptions = (selected?.controller_groups || []).map((group) => ({
       value: String(group),
-      label: buttonTitle(
-        plateLayout(selected?.cat, selected?.subcat),
-        group,
-        this.insteon.localize,
-      ),
+      label: deviceButtonTitle(selected?.cat, selected?.subcat, group, this.insteon.localize),
     }));
     const hasBatteryController = controllers.some((controller) =>
       this._controllerDevices.some(
@@ -480,8 +476,9 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
                     <div class="controller-row">
                       <span>
                         ${device?.name || controller.address} -
-                        ${buttonTitle(
-                          plateLayout(device?.cat, device?.subcat),
+                        ${deviceButtonTitle(
+                          device?.cat,
+                          device?.subcat,
                           controller.group,
                           this.insteon.localize,
                         )}

@@ -424,6 +424,43 @@ describe("insteon-device-overview-page", () => {
     expect(tiles[1].getAttribute("aria-selected")).toBe("true");
   });
 
+  it("titles mini remote buttons by letter", async () => {
+    const remote = {
+      ...kp014,
+      name: "Bed remote",
+      cat: 0x00,
+      subcat: 0x10,
+      is_battery: true,
+      buttons: { 1: "a", 2: "b", 3: "c", 4: "d" },
+    };
+    const el = await mount(makeHass(defaults({}, remote, [])));
+    const tiles = [...el.shadowRoot!.querySelectorAll(".tile")] as HTMLElement[];
+    tiles[2].click();
+    await settle(el);
+    expect(el.shadowRoot!.querySelector(".pane-title")!.textContent).toBe("Button C");
+  });
+
+  it("names the remote button that controls a keypad button", async () => {
+    const hass = makeHass(
+      defaults({}, kp014, [
+        rec({ group: 7, target: "35.65.B6", target_name: "Bed remote", data3: 2 }),
+      ]),
+    );
+    hass.devices = {
+      ...devices,
+      "dev-4": {
+        id: "dev-4",
+        identifiers: [["insteon", "35.65.B6"]],
+        model: "2342-222 (0x00, 0x1A)",
+        via_device_id: "modem-1",
+      },
+    };
+    const el = await mount(hass);
+    await select(el, 2);
+    // Group 7 on an 8-scene remote is button H.
+    expect(text(el)).toContain("Bed remote Button H");
+  });
+
   it("puts the header in the toolbar slot when narrow", async () => {
     const el = await mount(makeHass(defaults()), true);
     const headers = [...el.shadowRoot!.querySelectorAll("insteon-device-header")];

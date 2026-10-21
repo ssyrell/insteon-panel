@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buttonLabel,
   buttonTitle,
+  deviceButtonTitle,
   plateGroups,
   plateLayout,
   remoteButtonLabel,
@@ -124,5 +125,19 @@ describe("remoteButtonLabel", () => {
     expect(remoteButtonLabel(0x00, 0x11, 1)).toBeUndefined();
     expect(remoteButtonLabel(0x01, 0x10, 1)).toBeUndefined();
     expect(remoteButtonLabel(undefined, undefined, 1)).toBeUndefined();
+  });
+});
+
+describe("deviceButtonTitle", () => {
+  it("titles remote buttons by letter and other devices by their plate", () => {
+    expect(deviceButtonTitle(0x00, 0x1b, 3, localize)).toBe(
+      'device.overview.button.named:{"label":"C"}',
+    );
+    expect(deviceButtonTitle(0x01, 0x41, 3, localize)).toBe(
+      'device.overview.button.named:{"label":"C"}',
+    );
+    expect(deviceButtonTitle(0x00, 0x11, 1, localize)).toBe(
+      'device.overview.button.group:{"group":1}',
+    );
   });
 });

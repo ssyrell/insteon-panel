@@ -218,6 +218,24 @@ describe("scene controllers", () => {
     expect(element._scene!.controllers).toEqual([{ address: remote.address, group: 2 }]);
   });
 
+  it("names mini remote buttons by letter", async () => {
+    const { element } = await mount();
+    await select(element, 0, "device");
+    await select(element, 1, remote.address);
+    const buttons = element.shadowRoot!.querySelectorAll("ha-selector-select")[2] as HTMLElement & {
+      selector: { select: { options: { label: string }[] } };
+    };
+    expect(buttons.selector.select.options.map((option) => option.label)).toEqual([
+      "Button A",
+      "Button B",
+    ]);
+    await select(element, 2, "2");
+    await add(element);
+    expect(
+      element.shadowRoot!.querySelector(".controller-row")!.textContent!.replace(/\s+/g, " "),
+    ).toContain("Remote - Button B");
+  });
+
   it("adds responders after selectors report cleared values", async () => {
     vi.mocked(fetchEntityRegistry).mockResolvedValueOnce([
       {

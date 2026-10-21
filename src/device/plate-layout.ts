@@ -152,3 +152,17 @@ export const buttonTitle = (
   }
   return localize("device.overview.button.group", { group });
 };
+
+// Titles a device's button, including mini remotes, which have no plate layout.
+export const deviceButtonTitle = (
+  cat: number | null | undefined,
+  subcat: number | null | undefined,
+  group: number,
+  localize: (key: string, replace?: Record<string, unknown>) => string,
+): string => {
+  const remote = remoteButtonLabel(cat, subcat, group);
+  if (remote) {
+    return localize("device.overview.button.named", { label: remote });
+  }
+  return buttonTitle(plateLayout(cat, subcat), group, localize);
+};

@@ -20,7 +20,7 @@ import type { Insteon } from "../data/insteon";
 import type { InsteonDeviceScene } from "../data/scene";
 import { fetchInsteonDeviceScenes, importInsteonDeviceScene } from "../data/scene";
 import { catSubcatFromModel, insteonDeviceByAddress } from "../device/registry-lookup";
-import { buttonTitle, plateGroups, plateLayout, remoteButtonLabel } from "../device/plate-layout";
+import { deviceButtonTitle, plateGroups, plateLayout } from "../device/plate-layout";
 
 interface DeviceSceneRow extends DataTableRowData {
   id: string;
@@ -73,11 +73,7 @@ export class DeviceScenesPanel extends LitElement {
     if (entry && plateGroups(layout).length === 1) {
       return name;
     }
-    const remoteButton = remoteButtonLabel(cat, subcat, group);
-    if (remoteButton) {
-      return `${name} - ${this.insteon.localize("device.overview.button.named", { label: remoteButton })}`;
-    }
-    return `${name} - ${buttonTitle(layout, group, this.insteon.localize)}`;
+    return `${name} - ${deviceButtonTitle(cat, subcat, group, this.insteon.localize)}`;
   }
 
   private _area(address: string): string | undefined {
