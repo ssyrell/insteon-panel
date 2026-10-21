@@ -100,6 +100,30 @@ const KINDS: Partial<Record<PlateLayout, Record<number, string>>> = {
 
 export const plateGroups = (layout: PlateLayout): number[] => GROUPS[layout];
 
+// Button letters by group, matching pyinsteon. 8-scene remotes number each
+// button pair bottom-first, so group 1 is B and group 2 is A.
+const REMOTE_LETTERS: [number[], string[]][] = [
+  [
+    [0x10, 0x14, 0x17, 0x1b],
+    ["A", "B", "C", "D"],
+  ],
+  [
+    [0x12, 0x16, 0x18, 0x1a],
+    ["B", "A", "D", "C", "F", "E", "H", "G"],
+  ],
+];
+
+export const remoteButtonLabel = (
+  cat: number | null | undefined,
+  subcat: number | null | undefined,
+  group: number,
+): string | undefined => {
+  if (cat !== 0x00 || subcat === undefined || subcat === null) {
+    return undefined;
+  }
+  return REMOTE_LETTERS.find(([subcats]) => subcats.includes(subcat))?.[1][group - 1];
+};
+
 export const buttonLabel = (layout: PlateLayout, group: number): string | undefined => {
   if (layout === "keypad_i3_4") {
     return LETTERS[group - 1];

@@ -34,6 +34,18 @@ const registry = [
   { id: "light", name: "Island", model: "SwitchLinc (0x01, 0x20)", address: "44.44.44" },
   { id: "remote", name: "Remote", model: "Mini Remote (0x00, 0x10)", address: "66.66.66" },
   { id: "lamp", name: "Lamp", model: "LampLinc (0x01, 0x0e)", address: "77.77.77" },
+  {
+    id: "remote4",
+    name: "Bed remote",
+    model: "Mini Remote - 4 Scene (0x00, 0x1b)",
+    address: "88.88.88",
+  },
+  {
+    id: "remote8",
+    name: "Couch remote",
+    model: "Mini Remote - 8 Scene (0x00, 0x12)",
+    address: "99.99.99",
+  },
 ].map(
   ({ address, ...entry }) =>
     ({ ...entry, identifiers: [["insteon", address]] }) as unknown as DeviceRegistryEntry,
@@ -142,6 +154,29 @@ describe("device scenes panel", () => {
       element,
       expect.objectContaining({ defaultValue: "Island" }),
     );
+  });
+
+  it("names mini remote buttons by letter", async () => {
+    const remotes: InsteonDeviceScene = {
+      ...ready,
+      controllers: [
+        { address: "888888", group: 1 },
+        { address: "888888", group: 3 },
+        { address: "999999", group: 1 },
+        { address: "999999", group: 2 },
+        { address: "999999", group: 7 },
+        { address: "999999", group: 9 },
+      ],
+    };
+    const { table } = await mount(async () => [remotes]);
+    expect(table.data[0].controllers.split(", ")).toEqual([
+      "Bed remote - Button A",
+      "Bed remote - Button C",
+      "Couch remote - Button B",
+      "Couch remote - Button A",
+      "Couch remote - Button H",
+      "Couch remote - Group 9",
+    ]);
   });
 
   it("lists each distinct controller area and skips controllers without one", async () => {
