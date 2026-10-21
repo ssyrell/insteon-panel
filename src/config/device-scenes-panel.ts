@@ -10,7 +10,6 @@ import "@ha/layouts/hass-tabs-subpage-data-table";
 import "@ha/components/ha-button";
 import "@ha/components/ha-dialog";
 import "@ha/components/ha-spinner";
-import { computeDeviceName } from "@ha/common/entity/compute_device_name";
 import type { DeviceRegistryEntry } from "@ha/data/device_registry";
 import { fetchDeviceRegistry } from "@ha/data/device_registry";
 import { navigate } from "@ha/common/navigate";
@@ -19,8 +18,8 @@ import type { HomeAssistant } from "@ha/types";
 import type { Insteon } from "../data/insteon";
 import type { InsteonDeviceScene } from "../data/scene";
 import { fetchInsteonDeviceScenes, importInsteonDeviceScene } from "../data/scene";
-import { catSubcatFromModel, insteonDeviceByAddress } from "../device/registry-lookup";
-import { deviceButtonTitle, plateGroups, plateLayout } from "../device/plate-layout";
+import { insteonDeviceByAddress } from "../device/registry-lookup";
+import { outputName } from "../device/output-name";
 
 interface DeviceSceneRow extends DataTableRowData {
   id: string;
@@ -64,16 +63,8 @@ export class DeviceScenesPanel extends LitElement {
     }
   }
 
-  // Single-output devices are named without their output, which would only repeat "Load".
   private _output(address: string, group: number): string {
-    const entry = insteonDeviceByAddress(this._devices, address);
-    const [cat, subcat] = catSubcatFromModel(entry?.model) ?? [undefined, undefined];
-    const name = entry ? computeDeviceName(entry) || address : address;
-    const layout = plateLayout(cat, subcat);
-    if (entry && plateGroups(layout).length === 1) {
-      return name;
-    }
-    return `${name} - ${deviceButtonTitle(cat, subcat, group, this.insteon.localize)}`;
+    return outputName(this._devices, address, group, this.insteon.localize);
   }
 
   private _area(address: string): string | undefined {

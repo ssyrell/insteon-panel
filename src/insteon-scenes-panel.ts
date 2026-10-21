@@ -18,6 +18,7 @@ import { fetchInsteonScenes } from "./data/scene";
 import { navigate } from "@ha/common/navigate";
 import type { HASSDomEvent } from "@ha/common/dom/fire_event";
 import { insteonMainTabs } from "./insteon-router";
+import { outputName } from "./device/output-name";
 import "@ha/components/ha-fab";
 
 declare global {
@@ -32,6 +33,7 @@ declare global {
 
 interface SceneRowData extends InsteonScene {
   record?: InsteonScene;
+  controller_names?: string;
   num_devices?: number;
   ha_scene?: boolean;
   ha_script?: boolean;
@@ -90,15 +92,10 @@ export class InsteonScenesPanel extends LitElement {
         direction: "asc",
         showNarrow: true,
       },
-      controllers: {
+      controller_names: {
         title: this.insteon.localize("scenes.fields.controllers"),
-        template: (scene: InsteonScene) => html`
-          ${scene.controllers?.length
-            ? scene.controllers
-                .map((controller) => `${controller.address} / ${controller.group}`)
-                .join(", ")
-            : this.insteon.localize("scenes.scene.controllers.app_only")}
-        `,
+        sortable: true,
+        filterable: true,
         showNarrow: false,
       },
       actions: {
@@ -145,23 +142,37 @@ export class InsteonScenesPanel extends LitElement {
     hass.callService("insteon", "scene_off", { group: scene.group });
   }
 
-  private _records = memoizeOne((scenes: InsteonScenes): DataTableRowData[] => {
-    if (Object.keys(scenes).length === 0) {
-      return [];
-    }
-    const outputScenes: SceneRowData[] = [];
-    for (const [_, scene] of Object.entries(scenes)) {
-      const scene_data = {
-        ...scene,
-        num_devices: Object.keys(scene.devices).length,
-        ha_scene: true, // to be replace later
-        ha_script: false, // to be replace later
-        actions: "",
-      };
-      outputScenes.push(scene_data);
-    }
-    return outputScenes;
-  });
+  private _records = memoizeOne(
+    (scenes: InsteonScenes, devices: HomeAssistant["devices"] | undefined): DataTableRowData[] => {
+      if (Object.keys(scenes).length === 0) {
+        return [];
+      }
+      const outputScenes: SceneRowData[] = [];
+      for (const [_, scene] of Object.entries(scenes)) {
+        const scene_data = {
+          ...scene,
+          num_devices: Object.keys(scene.devices).length,
+          controller_names: scene.controllers?.length
+            ? scene.controllers
+                .map((controller) =>
+                  outputName(
+                    devices ?? {},
+                    controller.address,
+                    controller.group,
+                    this.insteon.localize,
+                  ),
+                )
+                .join(", ")
+            : this.insteon.localize("scenes.scene.controllers.app_only"),
+          ha_scene: true, // to be replace later
+          ha_script: false, // to be replace later
+          actions: "",
+        };
+        outputScenes.push(scene_data);
+      }
+      return outputScenes;
+    },
+  );
 
   protected render(): TemplateResult | void {
     return html`
@@ -171,7 +182,7 @@ export class InsteonScenesPanel extends LitElement {
         .tabs=${insteonMainTabs}
         .route=${this.route}
         id="group"
-        .data=${this._records(this._scenes)}
+        .data=${this._records(this._scenes, this.hass.devices)}
         .columns=${this._columns()}
         @row-click=${this._handleRowClicked}
         clickable
