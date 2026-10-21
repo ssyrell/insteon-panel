@@ -125,6 +125,25 @@ describe("device scenes panel", () => {
     );
   });
 
+  it("names single-output controllers without their output", async () => {
+    const paddle: InsteonDeviceScene = {
+      ...ready,
+      controllers: [
+        { address: "444444", group: 1 },
+        { address: "222222", group: 3 },
+      ],
+    };
+    vi.mocked(showPromptDialog).mockResolvedValue(null);
+    const { element, table } = await mount(async () => [paddle]);
+    expect(table.data[0].controllers).toBe("Island, Kitchen keypad - Button C");
+    importButton(table, 0).dispatchEvent(new Event("click"));
+    await settle(element);
+    expect(showPromptDialog).toHaveBeenCalledWith(
+      element,
+      expect.objectContaining({ defaultValue: "Island" }),
+    );
+  });
+
   it("lists each distinct controller area and skips controllers without one", async () => {
     const shared: InsteonDeviceScene = {
       ...ready,

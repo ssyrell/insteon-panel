@@ -64,21 +64,16 @@ export class DeviceScenesPanel extends LitElement {
     }
   }
 
+  // Single-output devices are named without their output, which would only repeat "Load".
   private _output(address: string, group: number): string {
     const entry = insteonDeviceByAddress(this._devices, address);
     const [cat, subcat] = catSubcatFromModel(entry?.model) ?? [undefined, undefined];
     const name = entry ? computeDeviceName(entry) || address : address;
-    return `${name} - ${buttonTitle(plateLayout(cat, subcat), group, this.insteon.localize)}`;
-  }
-
-  // Single-output devices are named without their output, which would only repeat "Load".
-  private _responder(address: string, group: number): string {
-    const entry = insteonDeviceByAddress(this._devices, address);
-    const [cat, subcat] = catSubcatFromModel(entry?.model) ?? [undefined, undefined];
-    if (entry && plateGroups(plateLayout(cat, subcat)).length === 1) {
-      return computeDeviceName(entry) || address;
+    const layout = plateLayout(cat, subcat);
+    if (entry && plateGroups(layout).length === 1) {
+      return name;
     }
-    return this._output(address, group);
+    return `${name} - ${buttonTitle(layout, group, this.insteon.localize)}`;
   }
 
   private _area(address: string): string | undefined {
@@ -108,7 +103,7 @@ export class DeviceScenesPanel extends LitElement {
           responders: scene.links
             .map(
               (link) =>
-                `${this._responder(link.address, link.data3)} (${Math.round((link.data1 * 100) / 255)}%)`,
+                `${this._output(link.address, link.data3)} (${Math.round((link.data1 * 100) / 255)}%)`,
             )
             .join(", "),
           status: scene.importable
