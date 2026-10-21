@@ -25,6 +25,7 @@ import { buttonTitle, plateLayout } from "../device/plate-layout";
 interface DeviceSceneRow extends DataTableRowData {
   id: string;
   controllers: string;
+  area: string;
   responders: string;
   status: string;
   scene: InsteonDeviceScene;
@@ -70,14 +71,30 @@ export class DeviceScenesPanel extends LitElement {
     return `${name} - ${buttonTitle(plateLayout(cat, subcat), group, this.insteon.localize)}`;
   }
 
+  private _area(address: string): string | undefined {
+    const areaId = insteonDeviceByAddress(this._devices, address)?.area_id;
+    return areaId ? this.hass.areas?.[areaId]?.name : undefined;
+  }
+
   private _rows = memoizeOne(
-    (scenes: InsteonDeviceScene[] | undefined, _devices: Record<string, DeviceRegistryEntry>) =>
+    (
+      scenes: InsteonDeviceScene[] | undefined,
+      _devices: Record<string, DeviceRegistryEntry>,
+      _areas: HomeAssistant["areas"] | undefined,
+    ) =>
       (scenes ?? []).map(
         (scene): DeviceSceneRow => ({
           id: scene.controllers.map((item) => `${item.address}:${item.group}`).join(","),
           controllers: scene.controllers
             .map((item) => this._output(item.address, item.group))
             .join(", "),
+          area: [
+            ...new Set(
+              scene.controllers
+                .map((item) => this._area(item.address))
+                .filter((area): area is string => !!area),
+            ),
+          ].join(", "),
           responders: scene.links
             .map(
               (link) =>
@@ -99,6 +116,14 @@ export class DeviceScenesPanel extends LitElement {
         sortable: true,
         filterable: true,
         flex: 2,
+        showNarrow: true,
+      },
+      area: {
+        title: this.insteon.localize("utils.device_scenes.fields.area"),
+        sortable: true,
+        filterable: true,
+        groupable: true,
+        flex: 1,
         showNarrow: true,
       },
       responders: {
@@ -166,7 +191,7 @@ export class DeviceScenesPanel extends LitElement {
       <hass-tabs-subpage-data-table
         .hass=${this.hass}
         .narrow=${this.narrow}
-        .data=${this._rows(this._scenes, this._devices)}
+        .data=${this._rows(this._scenes, this._devices, this.hass.areas)}
         .columns=${this._columns(this._importing)}
         .localizeFunc=${this.hass.localize}
         .mainPage=${false}

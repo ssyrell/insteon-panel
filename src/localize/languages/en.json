@@ -161,6 +161,7 @@
       "no_data": "No device-controlled scenes to import. Read the All-Link Databases of all devices to find scenes created outside Home Assistant.",
       "fields": {
         "controllers": "Controllers",
+        "area": "Area",
         "responders": "Responders",
         "status": "Status"
       },

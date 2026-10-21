@@ -24,8 +24,15 @@ import type { InsteonDeviceScene } from "../src/data/scene";
 import { localize } from "../src/localize/localize";
 
 const registry = [
-  { id: "keypad", name: "Kitchen keypad", model: "KeypadLinc (0x01, 0x41)", address: "22.22.22" },
+  {
+    id: "keypad",
+    name: "Kitchen keypad",
+    model: "KeypadLinc (0x01, 0x41)",
+    address: "22.22.22",
+    area_id: "kitchen",
+  },
   { id: "light", name: "Island", model: "SwitchLinc (0x01, 0x20)", address: "44.44.44" },
+  { id: "remote", name: "Remote", model: "Mini Remote (0x00, 0x10)", address: "66.66.66" },
 ].map(
   ({ address, ...entry }) =>
     ({ ...entry, identifiers: [["insteon", address]] }) as unknown as DeviceRegistryEntry,
@@ -57,7 +64,12 @@ const mount = async (callWS: (message: Record<string, unknown>) => Promise<unkno
   vi.mocked(fetchDeviceRegistry).mockResolvedValue(registry);
   const element = new DeviceScenesPanel();
   Object.assign(element, {
-    hass: { callWS: vi.fn(callWS), connection: {}, localize: (key: string) => key },
+    hass: {
+      callWS: vi.fn(callWS),
+      connection: {},
+      localize: (key: string) => key,
+      areas: { kitchen: { area_id: "kitchen", name: "Kitchen" } },
+    },
     insteon: {
       localize: (key: string, replace?: Record<string, unknown>) => localize("en", key, replace),
     },
@@ -82,12 +94,33 @@ describe("device scenes panel", () => {
 
   it("names controllers and responders and explains blocked scenes", async () => {
     const { table } = await mount(async () => [ready, blocked]);
-    expect(table.data.map((row: any) => [row.controllers, row.responders, row.status])).toEqual([
-      ["Kitchen keypad - Button C", "Island - Paddle (50%)", "Ready to import"],
-      ["Kitchen keypad - Button D", "", "Read the complete All-Link Database for 55.55.55"],
+    expect(
+      table.data.map((row: any) => [row.controllers, row.area, row.responders, row.status]),
+    ).toEqual([
+      ["Kitchen keypad - Button C", "Kitchen", "Island - Paddle (50%)", "Ready to import"],
+      [
+        "Kitchen keypad - Button D",
+        "Kitchen",
+        "",
+        "Read the complete All-Link Database for 55.55.55",
+      ],
     ]);
     expect((importButton(table, 0) as any).disabled).toBe(false);
     expect((importButton(table, 1) as any).disabled).toBe(true);
+  });
+
+  it("lists each distinct controller area and skips controllers without one", async () => {
+    const shared: InsteonDeviceScene = {
+      ...ready,
+      controllers: [
+        { address: "222222", group: 3 },
+        { address: "666666", group: 1 },
+        { address: "222222", group: 4 },
+      ],
+    };
+    const { table } = await mount(async () => [shared]);
+    expect(table.data[0].area).toBe("Kitchen");
+    expect(table.columns.area.title).toBe("Area");
   });
 
   it("imports with the chosen name and opens the new scene", async () => {
