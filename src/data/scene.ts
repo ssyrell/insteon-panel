@@ -1,3 +1,4 @@
+import type { EntityRegistryEntry } from "@ha/data/entity_registry";
 import type { HomeAssistant } from "@ha/types";
 import type { HaFormSchema } from "@ha/components/ha-form/types";
 
@@ -37,6 +38,12 @@ export interface InsteonSceneLinkData {
   data2: number;
   data3: number;
 }
+
+// The integration adds a switch for each scene with the unique ID "<modem>_scene_<group>".
+export const insteonSceneGroup = (entry: EntityRegistryEntry): number | undefined => {
+  const match = entry.platform === "insteon" ? /_scene_(\d+)$/.exec(entry.unique_id) : null;
+  return match ? Number(match[1]) : undefined;
+};
 
 export const fetchInsteonScenes = (hass: HomeAssistant): Promise<InsteonScenes> =>
   hass.callWS({

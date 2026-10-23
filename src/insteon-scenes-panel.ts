@@ -1,7 +1,7 @@
 import { mdiPlus, mdiLightbulbGroup, mdiLightbulbGroupOff } from "@mdi/js";
 import type { TemplateResult } from "lit";
 import { html, LitElement } from "lit";
-import { customElement, property } from "lit/decorators";
+import { customElement, property, state } from "lit/decorators";
 import memoizeOne from "memoize-one";
 import type {
   DataTableColumnContainer,
@@ -13,8 +13,10 @@ import type {
 import "@ha/layouts/hass-tabs-subpage-data-table";
 import type { HomeAssistant, Route } from "@ha/types";
 import type { Insteon } from "./data/insteon";
+import type { EntityRegistryEntry } from "@ha/data/entity_registry";
+import { fetchEntityRegistry } from "@ha/data/entity_registry";
 import type { InsteonScene, InsteonScenes } from "./data/scene";
-import { fetchInsteonScenes } from "./data/scene";
+import { fetchInsteonScenes, insteonSceneGroup } from "./data/scene";
 import { navigate } from "@ha/common/navigate";
 import type { HASSDomEvent } from "@ha/common/dom/fire_event";
 import { insteonMainTabs } from "./insteon-router";
@@ -34,6 +36,7 @@ declare global {
 interface SceneRowData extends InsteonScene {
   record?: InsteonScene;
   controller_names?: string;
+  area?: string;
   num_devices?: number;
   ha_scene?: boolean;
   ha_script?: boolean;
@@ -58,6 +61,8 @@ export class InsteonScenesPanel extends LitElement {
 
   @property({ type: Object }) private _scenes: InsteonScenes = {};
 
+  @state() private _sceneEntities: EntityRegistryEntry[] = [];
+
   public firstUpdated(changedProperties) {
     super.firstUpdated(changedProperties);
 
@@ -66,6 +71,9 @@ export class InsteonScenesPanel extends LitElement {
     }
     fetchInsteonScenes(this.hass).then((scenes) => {
       this._scenes = scenes;
+    });
+    fetchEntityRegistry(this.hass.connection).then((entities) => {
+      this._sceneEntities = entities.filter((entity) => insteonSceneGroup(entity) !== undefined);
     });
   }
 
@@ -84,6 +92,12 @@ export class InsteonScenesPanel extends LitElement {
         filterable: true,
         direction: "asc",
         showNarrow: true,
+      },
+      area: {
+        title: this.insteon.localize("scenes.fields.area"),
+        sortable: true,
+        filterable: true,
+        showNarrow: false,
       },
       num_devices: {
         title: this.insteon.localize("scenes.fields.num_devices"),
@@ -143,14 +157,23 @@ export class InsteonScenesPanel extends LitElement {
   }
 
   private _records = memoizeOne(
-    (scenes: InsteonScenes, devices: HomeAssistant["devices"] | undefined): DataTableRowData[] => {
+    (
+      scenes: InsteonScenes,
+      devices: HomeAssistant["devices"] | undefined,
+      sceneEntities: EntityRegistryEntry[],
+      areas: HomeAssistant["areas"] | undefined,
+    ): DataTableRowData[] => {
       if (Object.keys(scenes).length === 0) {
         return [];
       }
       const outputScenes: SceneRowData[] = [];
       for (const [_, scene] of Object.entries(scenes)) {
+        const areaId = sceneEntities.find(
+          (entity) => insteonSceneGroup(entity) === scene.group,
+        )?.area_id;
         const scene_data = {
           ...scene,
+          area: areaId ? areas?.[areaId]?.name : undefined,
           num_devices: Object.keys(scene.devices).length,
           controller_names: scene.controllers?.length
             ? scene.controllers
@@ -182,7 +205,12 @@ export class InsteonScenesPanel extends LitElement {
         .tabs=${insteonMainTabs}
         .route=${this.route}
         id="group"
-        .data=${this._records(this._scenes, this.hass.devices)}
+        .data=${this._records(
+          this._scenes,
+          this.hass.devices,
+          this._sceneEntities,
+          this.hass.areas,
+        )}
         .columns=${this._columns()}
         @row-click=${this._handleRowClicked}
         clickable

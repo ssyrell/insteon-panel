@@ -23,6 +23,7 @@
     "fields": {
       "group": "Scene",
       "name": "Name",
+      "area": "Area",
       "num_devices": "Devices",
       "controllers": "Controllers",
       "actions": "Actions"
@@ -40,6 +41,7 @@
       "save": "Save scene",
       "saving": "Saving scene data. Writing links to each device can take a minute or two.",
       "deleting": "Deleting scene. Removing links from each device can take a minute or two.",
+      "area_failed": "The scene was saved, but its area could not be set because Home Assistant has no switch for the scene. Save again to retry.",
       "activate": "Turn on",
       "deactivate": "Turn off",
       "controllers": {

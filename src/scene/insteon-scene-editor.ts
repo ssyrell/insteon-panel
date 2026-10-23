@@ -1,4 +1,5 @@
 import type { ActionDetail } from "@material/mwc-list/mwc-list-foundation";
+import type { UnsubscribeFunc } from "home-assistant-js-websocket";
 import { mdiContentSave, mdiDelete, mdiDotsVertical } from "@mdi/js";
 import "@ha/components/ha-list-item";
 import "@ha/components/ha-button-menu";
@@ -26,12 +27,17 @@ import "@ha/components/ha-alert";
 import "@ha/components/ha-button";
 import "@ha/components/ha-spinner";
 import "@ha/components/ha-selector/ha-selector-select";
+import "@ha/components/ha-area-picker";
 import { computeDeviceName } from "@ha/common/entity/compute_device_name";
 import type { DeviceRegistryEntry } from "@ha/data/device_registry";
 import { fetchDeviceRegistry } from "@ha/data/device_registry";
 import type { EntityRegistryEntry } from "@ha/data/entity_registry";
 import type { SelectSelector } from "@ha/data/selector";
-import { fetchEntityRegistry } from "@ha/data/entity_registry";
+import {
+  fetchEntityRegistry,
+  subscribeEntityRegistry,
+  updateEntityRegistryEntry,
+} from "@ha/data/entity_registry";
 import { showConfirmationDialog, showAlertDialog } from "@ha/dialogs/generic/show-dialog-box";
 import { KeyboardShortcutMixin } from "@ha/mixins/keyboard-shortcut-mixin";
 import { haStyle } from "@ha/resources/styles";
@@ -42,7 +48,12 @@ import { fetchInsteonDevice, rampRateSchema } from "../data/device";
 import { insteonAddress, normalizeAddress } from "../device/registry-lookup";
 import { deviceButtonTitle } from "../device/plate-layout";
 import type { InsteonScene, InsteonSceneDeviceData, InsteonSceneLinkData } from "../data/scene";
-import { fetchInsteonScene, saveInsteonScene, deleteInsteonScene } from "../data/scene";
+import {
+  fetchInsteonScene,
+  saveInsteonScene,
+  deleteInsteonScene,
+  insteonSceneGroup,
+} from "../data/scene";
 import type { HaDevicePickerDeviceFilterFunc } from "@ha/components/device/ha-device-picker";
 import { navigate } from "@ha/common/navigate";
 
@@ -143,6 +154,11 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
   @state() private _deviceRegistryEntries: DeviceRegistryEntry[] = [];
 
   @state() private _entityRegistryEntries: EntityRegistryEntry[] = [];
+
+  @state() private _sceneEntities: EntityRegistryEntry[] = [];
+
+  // The area chosen in the editor, applied to the scene's switch when saving.
+  @state() private _areaId?: string | null;
 
   private _insteonToHaDeviceMap: { [address: string]: InsteonToHaDeviceMap } = {};
 
@@ -346,11 +362,13 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
   private async _getEntityRegistryEntries(): Promise<void> {
     try {
       const allEntities = await fetchEntityRegistry(this.hass.connection);
+      this._sceneEntities = allEntities.filter((entity) => insteonSceneGroup(entity) !== undefined);
       this._entityRegistryEntries = allEntities.filter(
         (entity) =>
           entity.entity_category === null &&
           entity.config_entry_id === this.insteon.config_entry.entry_id &&
-          INCLUDED_DOMAINS.includes(computeDomain(entity.entity_id)),
+          INCLUDED_DOMAINS.includes(computeDomain(entity.entity_id)) &&
+          insteonSceneGroup(entity) === undefined,
       );
     } catch (error: unknown) {
       this._showError(error);
@@ -367,6 +385,12 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
             @change=${this._nameChanged}
             .label=${this.insteon.localize("scenes.scene.name")}
           ></ha-textfield>
+          <ha-area-picker
+            .hass=${this.hass}
+            .value=${this._sceneArea()}
+            .label=${this.insteon.localize("scenes.scene.area")}
+            @value-changed=${this._areaChanged}
+          ></ha-area-picker>
         </div>
       </ha-card>
 
@@ -1088,6 +1112,11 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
       if (!this._deviceControlled) {
         this._scene = { ...this._scene, controllers: [] };
       }
+      if (!(await this._saveArea(result.scene_id))) {
+        this._dirty = true;
+        this._errors = this.insteon.localize("scenes.scene.area_failed");
+        return;
+      }
       this._dirty = false;
       if (this._deviceControlled) {
         // Show controller buttons that the hardware scene added as responders.
@@ -1099,6 +1128,74 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
     } finally {
       this._saving = false;
     }
+  }
+
+  private _sceneEntity(group: number): EntityRegistryEntry | undefined {
+    return this._sceneEntities.find((entity) => insteonSceneGroup(entity) === group);
+  }
+
+  private _sceneArea(): string | undefined {
+    if (this._areaId !== undefined) {
+      return this._areaId ?? undefined;
+    }
+    return this._sceneEntity(this._scene!.group)?.area_id ?? undefined;
+  }
+
+  private _areaChanged(ev: CustomEvent<{ value?: string }>): void {
+    const areaId = ev.detail.value || null;
+    if (areaId === (this._sceneArea() ?? null)) {
+      return;
+    }
+    this._areaId = areaId;
+    this._dirty = true;
+  }
+
+  // Set the area of the scene's switch, which is added when a new scene is saved.
+  private async _saveArea(group: number): Promise<boolean> {
+    if (this._areaId === undefined) {
+      return true;
+    }
+    const entity = this._sceneEntity(group) ?? (await this._waitForSceneEntity(group));
+    if (!entity) {
+      return false;
+    }
+    const { entity_entry } = await updateEntityRegistryEntry(this.hass, entity.entity_id, {
+      area_id: this._areaId,
+    });
+    this._sceneEntities = [
+      ...this._sceneEntities.filter((candidate) => candidate.entity_id !== entity.entity_id),
+      entity_entry,
+    ];
+    this._areaId = undefined;
+    return true;
+  }
+
+  private _waitForSceneEntity(group: number): Promise<EntityRegistryEntry | undefined> {
+    return new Promise((resolve) => {
+      let found: EntityRegistryEntry | undefined;
+      let done = false;
+      let unsubscribe: UnsubscribeFunc | undefined;
+      const finish = () => {
+        if (done) {
+          return;
+        }
+        done = true;
+        clearTimeout(timeout);
+        unsubscribe?.();
+        resolve(found);
+      };
+      const timeout = setTimeout(finish, 10000);
+      // The registry can be reported before subscribeEntityRegistry returns.
+      unsubscribe = subscribeEntityRegistry(this.hass.connection, (entities) => {
+        found = entities.find((entity) => insteonSceneGroup(entity) === group);
+        if (found) {
+          finish();
+        }
+      });
+      if (done) {
+        unsubscribe();
+      }
+    });
   }
 
   private _checkDeviceEntitySelections(): boolean {
@@ -1210,7 +1307,8 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
           opacity: var(--light-disabled-opacity);
         }
         ha-icon-picker,
-        ha-entity-picker {
+        ha-entity-picker,
+        ha-area-picker {
           display: block;
           margin-top: 8px;
         }

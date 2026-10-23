@@ -28,7 +28,14 @@ vi.mock("@ha/mixins/keyboard-shortcut-mixin", () => ({
 }));
 vi.mock("@ha/common/navigate", () => ({ navigate: vi.fn() }));
 vi.mock("@ha/data/device_registry", () => ({ fetchDeviceRegistry: vi.fn() }));
-vi.mock("@ha/data/entity_registry", () => ({ fetchEntityRegistry: vi.fn(async () => []) }));
+vi.mock("@ha/data/entity_registry", () => ({
+  fetchEntityRegistry: vi.fn(async () => []),
+  subscribeEntityRegistry: vi.fn(() => vi.fn()),
+  updateEntityRegistryEntry: vi.fn(async (_hass, entityId: string, updates: object) => ({
+    entity_entry: { ...sceneSwitch(20), entity_id: entityId, ...updates },
+  })),
+}));
+vi.mock("@ha/components/ha-area-picker", () => ({}));
 vi.mock("@ha/dialogs/generic/show-dialog-box", () => ({
   showAlertDialog: vi.fn(),
   showConfirmationDialog: vi.fn(async () => true),
@@ -37,7 +44,11 @@ vi.mock("@ha/components/device/ha-device-picker", () => ({}));
 
 import { fetchDeviceRegistry } from "@ha/data/device_registry";
 import type { DeviceRegistryEntry } from "@ha/data/device_registry";
-import { fetchEntityRegistry } from "@ha/data/entity_registry";
+import {
+  fetchEntityRegistry,
+  subscribeEntityRegistry,
+  updateEntityRegistryEntry,
+} from "@ha/data/entity_registry";
 import type { EntityRegistryEntry } from "@ha/data/entity_registry";
 import { navigate } from "@ha/common/navigate";
 import { localize } from "../src/localize/localize";
@@ -245,6 +256,23 @@ const changeForm = async (
   form.dispatchEvent(new CustomEvent("value-changed", { detail: { value } }));
   await settle(element);
 };
+
+function sceneSwitch(group: number, area_id: string | null = null): EntityRegistryEntry {
+  return {
+    entity_id: `switch.scene_${group}`,
+    device_id: "modem",
+    config_entry_id: "entry",
+    entity_category: null,
+    platform: "insteon",
+    unique_id: `aaaaaa_scene_${group}`,
+    area_id,
+    name: null,
+    original_name: `Scene ${group}`,
+  } as EntityRegistryEntry;
+}
+
+const areaPicker = (element: InsteonSceneEditor) =>
+  element.shadowRoot!.querySelector("ha-area-picker") as HTMLElement & { value?: string };
 
 const add = async (element: InsteonSceneEditor): Promise<void> => {
   element.shadowRoot!.querySelector("ha-button")!.dispatchEvent(new Event("click"));
@@ -562,6 +590,84 @@ describe("scene controllers", () => {
         ],
       }),
     );
+  });
+
+  it("sets the area of an existing scene's switch when saving", async () => {
+    vi.mocked(fetchEntityRegistry).mockResolvedValueOnce([
+      sceneSwitch(20, "kitchen"),
+      sceneSwitch(21, "bedroom"),
+    ]);
+    const { element } = await mount(scene);
+    expect(areaPicker(element).value).toBe("kitchen");
+    // Scene switches are not treated as outputs of the modem.
+    expect(element.shadowRoot!.querySelector(".scene-device")).toBeNull();
+
+    areaPicker(element).dispatchEvent(
+      new CustomEvent("value-changed", { detail: { value: "bedroom" } }),
+    );
+    await settle(element);
+    expect(element.shadowRoot!.querySelector("ha-fab")!.classList.contains("dirty")).toBe(true);
+    expect(updateEntityRegistryEntry).not.toHaveBeenCalled();
+
+    await saveScene(element);
+    expect(updateEntityRegistryEntry).toHaveBeenCalledWith(element.hass, "switch.scene_20", {
+      area_id: "bedroom",
+    });
+    expect(areaPicker(element).value).toBe("bedroom");
+    expect(element.shadowRoot!.querySelector("ha-fab")!.classList.contains("dirty")).toBe(false);
+  });
+
+  it("clears an area and leaves unchanged areas alone", async () => {
+    vi.mocked(fetchEntityRegistry).mockResolvedValueOnce([sceneSwitch(20, "kitchen")]);
+    const { element } = await mount(scene);
+    areaPicker(element).dispatchEvent(
+      new CustomEvent("value-changed", { detail: { value: "kitchen" } }),
+    );
+    await saveScene(element);
+    expect(updateEntityRegistryEntry).not.toHaveBeenCalled();
+
+    areaPicker(element).dispatchEvent(new CustomEvent("value-changed", { detail: { value: "" } }));
+    await saveScene(element);
+    expect(updateEntityRegistryEntry).toHaveBeenCalledWith(element.hass, "switch.scene_20", {
+      area_id: null,
+    });
+  });
+
+  it("sets the area of a new scene once its switch is added", async () => {
+    vi.mocked(subscribeEntityRegistry).mockImplementationOnce((_conn, callback) => {
+      callback([]);
+      setTimeout(() => callback([sceneSwitch(20)]), 0);
+      return vi.fn();
+    });
+    const { element } = await mount();
+    expect(areaPicker(element).value).toBeUndefined();
+    areaPicker(element).dispatchEvent(
+      new CustomEvent("value-changed", { detail: { value: "kitchen" } }),
+    );
+    await saveScene(element);
+    expect(updateEntityRegistryEntry).toHaveBeenCalledWith(element.hass, "switch.scene_20", {
+      area_id: "kitchen",
+    });
+    expect(element.shadowRoot!.querySelector("ha-fab")!.classList.contains("dirty")).toBe(false);
+  });
+
+  it("reports an area that cannot be set", async () => {
+    const { element } = await mount();
+    areaPicker(element).dispatchEvent(
+      new CustomEvent("value-changed", { detail: { value: "kitchen" } }),
+    );
+    await settle(element);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      element.shadowRoot!.querySelector("ha-fab")!.dispatchEvent(new Event("click"));
+      await vi.advanceTimersByTimeAsync(10000);
+    } finally {
+      vi.useRealTimers();
+    }
+    await settle(element);
+    expect(element.shadowRoot!.textContent).toContain("its area could not be set");
+    expect(element.shadowRoot!.querySelector("ha-fab")!.classList.contains("dirty")).toBe(true);
+    expect(updateEntityRegistryEntry).not.toHaveBeenCalled();
   });
 
   it("explains that the scene is saving", async () => {

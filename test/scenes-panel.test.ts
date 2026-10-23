@@ -7,6 +7,13 @@ vi.mock("@ha/common/entity/compute_device_name", () => ({
 }));
 vi.mock("@ha/common/navigate", () => ({ navigate: vi.fn() }));
 vi.mock("../src/insteon-router", () => ({ insteonMainTabs: [] }));
+vi.mock("@ha/data/entity_registry", () => ({
+  fetchEntityRegistry: vi.fn(async () => [
+    { platform: "insteon", unique_id: "aaaaaa_scene_21", area_id: "bedroom" },
+    { platform: "insteon", unique_id: "aaaaaa_scene_20", area_id: null },
+    { platform: "other", unique_id: "x_scene_20", area_id: "kitchen" },
+  ]),
+}));
 
 import { InsteonScenesPanel } from "../src/insteon-scenes-panel";
 import type { InsteonScenes } from "../src/data/scene";
@@ -52,7 +59,13 @@ describe("scenes panel", () => {
   it("names each controller's device and button", async () => {
     const element = new InsteonScenesPanel();
     Object.assign(element, {
-      hass: { callWS: vi.fn(async () => scenes), devices, localize: (key: string) => key },
+      hass: {
+        callWS: vi.fn(async () => scenes),
+        connection: {},
+        devices,
+        areas: { bedroom: { area_id: "bedroom", name: "Bedroom" } },
+        localize: (key: string) => key,
+      },
       insteon: {
         localize: (key: string, replace?: Record<string, unknown>) => localize("en", key, replace),
       },
@@ -65,5 +78,7 @@ describe("scenes panel", () => {
       "Bedroom keypad - Button C, Bed remote - Button C, Hall, 123456 - Group 2",
     ]);
     expect(table.columns.controller_names).toMatchObject({ sortable: true, filterable: true });
+    expect(table.data.map((row: any) => row.area)).toEqual([undefined, "Bedroom"]);
+    expect(table.columns.area).toMatchObject({ title: "Area", sortable: true, filterable: true });
   });
 });
