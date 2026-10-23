@@ -61,14 +61,25 @@
         "upgrade": "Device + Home Assistant scenes require an updated Insteon integration and pyinsteon library."
       },
       "devices": {
-        "header": "Add device",
-        "introduction": "Add or remove devices from the scene. Select the entities associated with each device that you want the scene to control.",
+        "header": "Devices",
+        "introduction": "Add devices to the scene and set what each one does when the scene turns on. For devices with several outputs, such as keypads, select the outputs that the scene controls.",
         "remove": "Remove device",
         "add": "Add device",
         "on_level": "On level",
-        "ramp_rate": "Ramp rate in seconds",
-        "button": "Button",
-        "level_summary": "{level}% · {ramp} s ramp"
+        "ramp_rate": "Ramp rate",
+        "seconds": "{seconds} s",
+        "state": "State",
+        "speed": "Speed",
+        "states": {
+          "off": "Off",
+          "on": "On",
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High",
+          "unlocked": "Unlocked",
+          "locked": "Locked"
+        },
+        "button": "Button"
       }
     }
   },

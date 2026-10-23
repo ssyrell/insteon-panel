@@ -2,9 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@ha/components/ha-list-item", () => ({}));
 vi.mock("@ha/components/ha-button-menu", () => ({}));
-vi.mock("@polymer/paper-item/paper-icon-item", () => ({}));
-vi.mock("@polymer/paper-item/paper-item", () => ({}));
-vi.mock("@polymer/paper-item/paper-item-body", () => ({}));
 vi.mock("@ha/common/util/render-status", () => ({ afterNextRender: vi.fn() }));
 vi.mock("@ha/common/util/compute_rtl", () => ({ computeRTL: () => false }));
 vi.mock("@ha/common/entity/compute_device_name", () => ({
@@ -18,12 +15,12 @@ vi.mock("@ha/components/ha-icon-picker", () => ({}));
 vi.mock("@ha/components/ha-svg-icon", () => ({}));
 vi.mock("@ha/components/ha-textfield", () => ({}));
 vi.mock("@ha/components/ha-checkbox", () => ({}));
-vi.mock("@ha/components/ha-switch", () => ({}));
+vi.mock("@ha/components/ha-formfield", () => ({}));
+vi.mock("@ha/components/ha-form/ha-form", () => ({}));
 vi.mock("@ha/components/ha-alert", () => ({}));
 vi.mock("@ha/components/ha-button", () => ({}));
 vi.mock("@ha/components/ha-spinner", () => ({}));
 vi.mock("@ha/components/ha-selector/ha-selector-select", () => ({}));
-vi.mock("@ha/components/ha-form/ha-form", () => ({}));
 vi.mock("@ha/panels/config/ha-config-section", () => ({}));
 vi.mock("@ha/resources/styles", () => ({ haStyle: [] }));
 vi.mock("@ha/mixins/keyboard-shortcut-mixin", () => ({
@@ -36,7 +33,7 @@ vi.mock("@ha/dialogs/generic/show-dialog-box", () => ({
   showAlertDialog: vi.fn(),
   showConfirmationDialog: vi.fn(async () => true),
 }));
-vi.mock("../src/device/insteon-device-picker", () => ({}));
+vi.mock("@ha/components/device/ha-device-picker", () => ({}));
 
 import { fetchDeviceRegistry } from "@ha/data/device_registry";
 import type { DeviceRegistryEntry } from "@ha/data/device_registry";
@@ -67,6 +64,19 @@ const registry: DeviceRegistryEntry[] = [
     name: "Keypad",
     config_entries: ["entry"],
     identifiers: [["insteon", "22.22.22"]],
+    area_id: "kitchen",
+  },
+  {
+    id: "fanlinc",
+    name: "Fan",
+    config_entries: ["entry"],
+    identifiers: [["insteon", "44.44.44"]],
+  },
+  {
+    id: "lock",
+    name: "Door",
+    config_entries: ["entry"],
+    identifiers: [["insteon", "55.55.55"]],
   },
 ].map((entry) => ({
   ...entry,
@@ -83,7 +93,7 @@ const registry: DeviceRegistryEntry[] = [
   hw_version: null,
   serial_number: null,
   via_device_id: null,
-  area_id: null,
+  area_id: entry.area_id ?? null,
   name_by_user: null,
   entry_type: null,
   disabled_by: null,
@@ -154,7 +164,13 @@ const mount = async (
   });
   const element = new InsteonSceneEditor();
   Object.assign(element, {
-    hass: { callWS, connection: {}, states: {}, localize: (key: string) => key },
+    hass: {
+      callWS,
+      connection: {},
+      states: {},
+      areas: { kitchen: { area_id: "kitchen", name: "Kitchen" } },
+      localize: (key: string) => key,
+    },
     insteon: {
       config_entry: { entry_id: "entry" },
       localize: (key: string, replace?: Record<string, unknown>) => localize("en", key, replace),
@@ -174,6 +190,63 @@ const select = async (
   element
     .shadowRoot!.querySelectorAll("ha-selector-select")
     [index].dispatchEvent(new CustomEvent("value-changed", { detail: { value } }));
+  await settle(element);
+};
+
+const pickController = async (element: InsteonSceneEditor, deviceId: string): Promise<void> => {
+  element
+    .shadowRoot!.querySelector("ha-device-picker.controller-picker")!
+    .dispatchEvent(new CustomEvent("value-changed", { detail: { value: deviceId } }));
+  await settle(element);
+};
+
+const pickResponder = async (element: InsteonSceneEditor, deviceId: string): Promise<void> => {
+  element
+    .shadowRoot!.querySelector("ha-device-picker.responder-picker")!
+    .dispatchEvent(new CustomEvent("value-changed", { detail: { value: deviceId } }));
+  await settle(element);
+};
+
+const entity = (
+  entity_id: string,
+  device_id: string,
+  unique_id: string,
+  original_name: string,
+): EntityRegistryEntry =>
+  ({
+    entity_id,
+    device_id,
+    config_entry_id: "entry",
+    entity_category: null,
+    unique_id,
+    name: null,
+    original_name,
+  }) as EntityRegistryEntry;
+
+type EntityForm = HTMLElement & {
+  data: Record<string, unknown>;
+  schema: {
+    name: string;
+    schema?: {
+      name: string;
+      selector: Record<string, { options: { value: string; label: string }[] }>;
+    }[];
+    selector?: Record<string, { options: { value: string; label: string }[] }>;
+  }[];
+};
+
+const forms = (element: InsteonSceneEditor): EntityForm[] =>
+  [...element.shadowRoot!.querySelectorAll("ha-form")] as EntityForm[];
+
+const toggleOptions = (form: EntityForm): string[] =>
+  form.schema[0].selector!.button_toggle.options.map((option) => `${option.label}=${option.value}`);
+
+const changeForm = async (
+  element: InsteonSceneEditor,
+  form: EntityForm,
+  value: Record<string, unknown>,
+): Promise<void> => {
+  form.dispatchEvent(new CustomEvent("value-changed", { detail: { value } }));
   await settle(element);
 };
 
@@ -205,8 +278,8 @@ describe("scene controllers", () => {
   it("lists controller-only remotes without responder-domain entities", async () => {
     const { element, callWS } = await mount();
     await select(element, 0, "device");
-    await select(element, 1, remote.address);
-    await select(element, 2, "2");
+    await pickController(element, "remote");
+    await select(element, 1, "2");
     await add(element);
     expect(element.shadowRoot!.textContent).toContain("Remote");
     expect(element.shadowRoot!.textContent).toContain("Wake battery-operated controllers");
@@ -221,15 +294,15 @@ describe("scene controllers", () => {
   it("names mini remote buttons by letter", async () => {
     const { element } = await mount();
     await select(element, 0, "device");
-    await select(element, 1, remote.address);
-    const buttons = element.shadowRoot!.querySelectorAll("ha-selector-select")[2] as HTMLElement & {
+    await pickController(element, "remote");
+    const buttons = element.shadowRoot!.querySelectorAll("ha-selector-select")[1] as HTMLElement & {
       selector: { select: { options: { label: string }[] } };
     };
     expect(buttons.selector.select.options.map((option) => option.label)).toEqual([
       "Button A",
       "Button B",
     ]);
-    await select(element, 2, "2");
+    await select(element, 1, "2");
     await add(element);
     expect(
       element.shadowRoot!.querySelector(".controller-row")!.textContent!.replace(/\s+/g, " "),
@@ -250,34 +323,23 @@ describe("scene controllers", () => {
     ]);
     const { element, callWS } = await mount();
     await select(element, 0, "device");
-    await select(element, 1, remote.address);
-    await select(element, 2, "1");
+    await pickController(element, "remote");
+    await select(element, 1, "1");
     await add(element);
+    await pickController(element, "");
     await select(element, 1, undefined);
-    await select(element, 2, undefined);
     await select(element, 0, undefined);
 
-    element
-      .shadowRoot!.querySelector("insteon-device-picker")!
-      .dispatchEvent(new CustomEvent("value-changed", { detail: { value: "keypad" } }));
-    await settle(element);
+    await pickResponder(element, "keypad");
 
-    expect(element.shadowRoot!.textContent).toContain("Keypad main");
-    expect(
-      element.shadowRoot!.querySelector("h1.card-header")!.parentElement!.textContent,
-    ).not.toContain(";");
-    expect(element._scene!.devices).toEqual({ "22.22.22": [] });
-    const checkbox = element.shadowRoot!.querySelector("ha-checkbox") as HTMLElement & {
-      checked: boolean;
-    };
-    checkbox.checked = true;
-    checkbox.dispatchEvent(new Event("change"));
-    await settle(element);
+    expect(element.shadowRoot!.querySelector(".scene-device")!.textContent).not.toContain(";");
+    // A device with one output joins the scene without an output checkbox.
+    expect(element.shadowRoot!.querySelector("ha-checkbox")).toBeNull();
     await saveScene(element);
     expect(callWS).toHaveBeenCalledWith(
       expect.objectContaining({
         controllers: [{ address: remote.address, group: 1 }],
-        links: [{ address: "22.22.22", data1: 0, data2: 0, data3: 1 }],
+        links: [{ address: "22.22.22", data1: 255, data2: 28, data3: 1 }],
       }),
     );
   });
@@ -293,8 +355,8 @@ describe("scene controllers", () => {
 
   it("rejects duplicate buttons and device-controlled scenes with no controller", async () => {
     const { element, callWS } = await mount(scene);
-    await select(element, 1, keypad.address);
-    await select(element, 2, "3");
+    await pickController(element, "keypad");
+    await select(element, 1, "3");
     await add(element);
     expect(element.shadowRoot!.textContent).toContain("already in the scene");
     element
@@ -318,8 +380,8 @@ describe("scene controllers", () => {
     const write = vi.fn(async () => ({ scene_id: 23, result: false }));
     const { element, callWS } = await mount(undefined, write);
     await select(element, 0, "device");
-    await select(element, 1, keypad.address);
-    await select(element, 2, "3");
+    await pickController(element, "keypad");
+    await select(element, 1, "3");
     await add(element);
     await saveScene(element);
     expect(element.shadowRoot!.textContent).toContain("not fully written");
@@ -368,20 +430,140 @@ describe("scene controllers", () => {
         ],
       },
     });
-    const checkbox = element.shadowRoot!.querySelector("ha-checkbox") as HTMLElement & {
-      checked: boolean;
-    };
-    const toggle = element.shadowRoot!.querySelector("ha-switch") as HTMLElement & {
-      checked: boolean;
-    };
-    expect(checkbox.checked).toBe(true);
-    expect(toggle.checked).toBe(true);
-    expect(element.shadowRoot!.textContent).toContain("75% · 0.5 s ramp");
+    const [form] = forms(element);
+    expect(form.data).toEqual({ on_level: 75, ramp_rate: "28" });
+    // The rounded level is reported back without changing the stored level.
+    await changeForm(element, form, { on_level: 75, ramp_rate: "28" });
     expect(element.shadowRoot!.querySelector("ha-fab")!.classList.contains("dirty")).toBe(false);
     await saveScene(element);
     expect(callWS).toHaveBeenCalledWith(
       expect.objectContaining({
         links: [{ address: "22.22.22", data1: 191, data2: 28, data3: 1 }],
+      }),
+    );
+  });
+
+  it("lists controller devices with their areas", async () => {
+    const { element } = await mount(scene);
+    const picker = element.shadowRoot!.querySelector(
+      "ha-device-picker.controller-picker",
+    ) as HTMLElement & { deviceFilter: (device: { id: string }) => boolean };
+    expect(picker.deviceFilter({ id: "keypad" })).toBe(true);
+    expect(picker.deviceFilter({ id: "remote" })).toBe(true);
+    expect(picker.deviceFilter({ id: "missing" })).toBe(false);
+    const row = element.shadowRoot!.querySelector(".controller-row")!;
+    expect(row.querySelector(".secondary")!.textContent).toBe("Kitchen");
+  });
+
+  it("offers Insteon responder devices that are not already in the scene", async () => {
+    vi.mocked(fetchEntityRegistry).mockResolvedValueOnce([
+      entity("fan.fan", "fanlinc", "444444_2", "Fan"),
+    ]);
+    const { element } = await mount({
+      ...scene,
+      devices: {
+        "44.44.44": [
+          { data1: 255, data2: 0, data3: 2, has_controller: false, has_responder: true },
+        ],
+      },
+    });
+    const picker = element.shadowRoot!.querySelector(
+      "ha-device-picker.responder-picker",
+    ) as HTMLElement & {
+      deviceFilter: (device: { id: string; model?: string }) => boolean;
+      excludeDevices: string[];
+    };
+    expect(picker.deviceFilter({ id: "keypad" })).toBe(true);
+    expect(picker.deviceFilter({ id: "keypad", model: "PowerLinc Modem (0x03, 0x15)" })).toBe(
+      false,
+    );
+    expect(picker.deviceFilter({ id: "zigbee" })).toBe(false);
+    expect(picker.excludeDevices).toEqual(["fanlinc"]);
+  });
+
+  it("selects outputs of multi-output devices and sets each by type", async () => {
+    vi.mocked(fetchEntityRegistry).mockResolvedValueOnce([
+      entity("light.keypad_main", "keypad", "222222_1", "Keypad main"),
+      entity("switch.keypad_c", "keypad", "222222_3", "Keypad C"),
+    ]);
+    const { element, callWS } = await mount();
+    await pickResponder(element, "keypad");
+    const card = element.shadowRoot!.querySelector(".scene-device")!;
+    expect(card.querySelector(".card-header .secondary")!.textContent).toBe("Kitchen");
+    expect(element._scene!.devices).toEqual({ "22.22.22": [] });
+    expect(card.querySelector("ha-form")).toBeNull();
+
+    const checkboxes = card.querySelectorAll("ha-checkbox");
+    expect(checkboxes).toHaveLength(2);
+    const buttonC = checkboxes[1] as HTMLElement & { checked: boolean };
+    buttonC.checked = true;
+    buttonC.dispatchEvent(new Event("change"));
+    await settle(element);
+
+    const [state] = forms(element);
+    expect(forms(element)).toHaveLength(1);
+    expect(toggleOptions(state)).toEqual(["Off=0", "On=255"]);
+    expect(state.data).toEqual({ state: "255" });
+    await changeForm(element, state, { state: "0" });
+    await saveScene(element);
+    expect(callWS).toHaveBeenCalledWith(
+      expect.objectContaining({
+        links: [{ address: "22.22.22", data1: 0, data2: 0, data3: 3 }],
+      }),
+    );
+  });
+
+  it("sets dimmer levels and ramp rates inline", async () => {
+    vi.mocked(fetchEntityRegistry).mockResolvedValueOnce([
+      entity("light.keypad_main", "keypad", "222222_1", "Keypad main"),
+    ]);
+    const { element, callWS } = await mount();
+    await pickResponder(element, "keypad");
+    const [form] = forms(element);
+    const [level, ramp] = form.schema[0].schema!;
+    expect(level.selector.number).toMatchObject({ min: 0, max: 100, mode: "slider" });
+    const options = ramp.selector.select.options.map((o) => `${o.value}=${o.label}`);
+    expect(options[0]).toBe("31=0.1 s");
+    expect(options.at(-1)).toBe("0=540 s");
+    expect(form.data).toEqual({ on_level: 100, ramp_rate: "28" });
+    await changeForm(element, form, { on_level: 50, ramp_rate: "28" });
+    await changeForm(element, forms(element)[0], { on_level: 50, ramp_rate: "27" });
+    await changeForm(element, forms(element)[0], { on_level: undefined, ramp_rate: "27" });
+    await saveScene(element);
+    expect(callWS).toHaveBeenCalledWith(
+      expect.objectContaining({
+        links: [{ address: "22.22.22", data1: 128, data2: 27, data3: 1 }],
+      }),
+    );
+  });
+
+  it("offers fan speeds and lock states", async () => {
+    vi.mocked(fetchEntityRegistry).mockResolvedValueOnce([
+      entity("fan.fan", "fanlinc", "444444_2", "Fan"),
+      entity("lock.door", "lock", "555555_1", "Door"),
+    ]);
+    const { element, callWS } = await mount({
+      ...scene,
+      devices: {
+        "44.44.44": [
+          { data1: 0x7f, data2: 0, data3: 2, has_controller: false, has_responder: true },
+        ],
+      },
+    });
+    const [fan] = forms(element);
+    expect(toggleOptions(fan)).toEqual(["Off=0", "Low=64", "Medium=192", "High=255"]);
+    expect(fan.data).toEqual({ speed: "64" });
+    await changeForm(element, fan, { speed: "192" });
+
+    await pickResponder(element, "lock");
+    expect(toggleOptions(forms(element)[1])).toEqual(["Unlocked=0", "Locked=255"]);
+    await saveScene(element);
+    expect(callWS).toHaveBeenCalledWith(
+      expect.objectContaining({
+        links: [
+          { address: "44.44.44", data1: 192, data2: 0, data3: 2 },
+          { address: "55.55.55", data1: 255, data2: 0, data3: 1 },
+        ],
       }),
     );
   });
