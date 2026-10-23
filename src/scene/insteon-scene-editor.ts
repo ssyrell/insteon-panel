@@ -457,35 +457,23 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
         kind === "dimmer"
           ? [
               {
-                type: "grid",
-                name: "",
-                schema: [
-                  {
-                    name: "on_level",
-                    selector: {
-                      number: {
-                        min: 0,
-                        max: 100,
-                        step: 1,
-                        mode: "slider",
-                        unit_of_measurement: "%",
-                      },
-                    },
+                name: "on_level",
+                selector: {
+                  number: { min: 0, max: 100, step: 1, mode: "slider", unit_of_measurement: "%" },
+                },
+              },
+              {
+                name: "ramp_rate",
+                required: true,
+                selector: {
+                  select: {
+                    mode: "dropdown",
+                    options: RAMP_RATE_OPTIONS.map(([value, seconds]) => ({
+                      value,
+                      label: this.insteon.localize("scenes.scene.devices.seconds", { seconds }),
+                    })),
                   },
-                  {
-                    name: "ramp_rate",
-                    required: true,
-                    selector: {
-                      select: {
-                        mode: "dropdown",
-                        options: RAMP_RATE_OPTIONS.map(([value, seconds]) => ({
-                          value,
-                          label: this.insteon.localize("scenes.scene.devices.seconds", { seconds }),
-                        })),
-                      },
-                    },
-                  },
-                ],
+                },
               },
             ]
           : kind === "fan"

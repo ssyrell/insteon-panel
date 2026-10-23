@@ -227,11 +227,7 @@ type EntityForm = HTMLElement & {
   data: Record<string, unknown>;
   schema: {
     name: string;
-    schema?: {
-      name: string;
-      selector: Record<string, { options: { value: string; label: string }[] }>;
-    }[];
-    selector?: Record<string, { options: { value: string; label: string }[] }>;
+    selector: Record<string, { options: { value: string; label: string }[] }>;
   }[];
 };
 
@@ -239,7 +235,7 @@ const forms = (element: InsteonSceneEditor): EntityForm[] =>
   [...element.shadowRoot!.querySelectorAll("ha-form")] as EntityForm[];
 
 const toggleOptions = (form: EntityForm): string[] =>
-  form.schema[0].selector!.button_toggle.options.map((option) => `${option.label}=${option.value}`);
+  form.schema[0].selector.button_toggle.options.map((option) => `${option.label}=${option.value}`);
 
 const changeForm = async (
   element: InsteonSceneEditor,
@@ -520,7 +516,7 @@ describe("scene controllers", () => {
     const { element, callWS } = await mount();
     await pickResponder(element, "keypad");
     const [form] = forms(element);
-    const [level, ramp] = form.schema[0].schema!;
+    const [level, ramp] = form.schema;
     expect(level.selector.number).toMatchObject({ min: 0, max: 100, mode: "slider" });
     const options = ramp.selector.select.options.map((o) => `${o.value}=${o.label}`);
     expect(options[0]).toBe("31=0.1 s");
