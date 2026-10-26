@@ -302,18 +302,18 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
             rtl: computeRTL(this.hass),
           })}
         >
-          <ha-config-section vertical .isWide=${this.isWide}>
-            ${this._saving
-              ? html`<div class="saving" role="status">
+          ${this._saving
+            ? html`<ha-config-section vertical .isWide=${this.isWide}>
+                <div class="saving" role="status">
                   <ha-spinner size="large"></ha-spinner>
                   <span
                     >${this.insteon.localize(
                       this._deleting ? "scenes.scene.deleting" : "scenes.scene.saving",
                     )}</span
                   >
-                </div>`
-              : this._showEditorArea(name, devices)}
-          </ha-config-section>
+                </div>
+              </ha-config-section>`
+            : this._showEditorArea(name, devices)}
         </div>
         <ha-fab
           slot="fab"
@@ -375,26 +375,30 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
     }
   }
 
+  // The scene and device sections are siblings, as in Home Assistant's scene editor, so
+  // their cards are the same width.
   private _showEditorArea(name, devices) {
-    return html`<div slot="introduction">${this.insteon.localize("scenes.scene.introduction")}</div>
-      <ha-card outlined>
-        <div class="card-content">
-          <ha-textfield
-            .value=${name}
-            .name=${"name"}
-            @change=${this._nameChanged}
-            .label=${this.insteon.localize("scenes.scene.name")}
-          ></ha-textfield>
-          <ha-area-picker
-            .hass=${this.hass}
-            .value=${this._sceneArea()}
-            .label=${this.insteon.localize("scenes.scene.area")}
-            @value-changed=${this._areaChanged}
-          ></ha-area-picker>
-        </div>
-      </ha-card>
+    return html`<ha-config-section vertical .isWide=${this.isWide}>
+        <div slot="introduction">${this.insteon.localize("scenes.scene.introduction")}</div>
+        <ha-card outlined>
+          <div class="card-content">
+            <ha-textfield
+              .value=${name}
+              .name=${"name"}
+              @change=${this._nameChanged}
+              .label=${this.insteon.localize("scenes.scene.name")}
+            ></ha-textfield>
+            <ha-area-picker
+              .hass=${this.hass}
+              .value=${this._sceneArea()}
+              .label=${this.insteon.localize("scenes.scene.area")}
+              @value-changed=${this._areaChanged}
+            ></ha-area-picker>
+          </div>
+        </ha-card>
 
-      ${this._showControllers()}
+        ${this._showControllers()}
+      </ha-config-section>
 
       <ha-config-section vertical .isWide=${this.isWide}>
         <div slot="header">${this.insteon.localize("scenes.scene.devices.header")}</div>
