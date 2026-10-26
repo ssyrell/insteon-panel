@@ -11,7 +11,6 @@ vi.mock("@ha/layouts/hass-subpage", () => ({}));
 vi.mock("@ha/components/ha-card", () => ({}));
 vi.mock("@ha/components/ha-fab", () => ({}));
 vi.mock("@ha/components/ha-icon-button", () => ({}));
-vi.mock("@ha/components/ha-icon-picker", () => ({}));
 vi.mock("@ha/components/ha-svg-icon", () => ({}));
 vi.mock("@ha/components/ha-textfield", () => ({}));
 vi.mock("@ha/components/ha-checkbox", () => ({}));

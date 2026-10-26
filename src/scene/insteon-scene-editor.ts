@@ -16,7 +16,6 @@ import "@ha/layouts/hass-subpage";
 import "@ha/components/ha-card";
 import "@ha/components/ha-fab";
 import "@ha/components/ha-icon-button";
-import "@ha/components/ha-icon-picker";
 import "@ha/components/ha-svg-icon";
 import "@ha/components/ha-textfield";
 import "@ha/components/ha-checkbox";
@@ -1310,7 +1309,6 @@ export class InsteonSceneEditor extends KeyboardShortcutMixin(LitElement) {
         ha-fab.saving {
           opacity: var(--light-disabled-opacity);
         }
-        ha-icon-picker,
         ha-entity-picker,
         ha-area-picker {
           display: block;
